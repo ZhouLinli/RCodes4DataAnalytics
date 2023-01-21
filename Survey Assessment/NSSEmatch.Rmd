@@ -1,0 +1,245 @@
+---
+title: "NSSE"
+author: "Linli Zhou"
+date: "2022-08-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning=FALSE, message=FALSE, fig.align = "center") #display code along with its results
+#options(digits=2)#set digit displayed in knitted file (AFTER KNITTED)
+library(haven)
+library(readxl)
+library(tidyverse)
+library(writexl)
+library(ggrepel)
+library(kableExtra)
+```
+
+```{r setup color, include=FALSE}
+library(ggplot2)
+
+mycolors<-c("#13294b","#5c88da","#69b3e7","#fcb53b","#6C6F70","#641F45")
+scale_color_manual(values=mycolors)
+
+theme_lz <- function(){ 
+    font <- "Helvetica"   #assign font family up front
+    theme_minimal() %+replace%    #replace elements already strips axis lines, 
+    theme(
+      panel.grid.major = element_blank(),    #strip major gridlines
+      panel.grid.minor = element_blank(),    #strip minor gridlines
+      plot.title = element_text(family = font, size = 9, face = 'bold',hjust = 0.5, vjust = 2),
+      axis.title = element_blank(), 
+      axis.text = element_blank(), 
+      axis.text.x = element_text(family = font, size = 9, margin = margin(t=5,b=10)),
+      axis.ticks = element_blank(),          #strip axis ticks
+      
+      legend.title = element_text(family = font, size=9),
+      legend.text = element_blank(),
+      legend.position="none",
+      
+      strip.text = element_text(family = font, size = 9, margin = margin(t=5,b=10)),#move up is + 1
+      strip.background = element_blank()
+    )}
+```
+
+
+## Purpose
+
+This project compared NSSE result from freshmen in 2018 who become senior in 2022. I did a merge-and-match first, then visualize each matched students' change in terms of NSSE survey results.
+
+```{r load data}
+#2022 data
+nsse22.sav<-read_sav("/Users/linlizhou/Documents/LASELL/data/NSSE_report/data/NSSE22 Data (Lasell).sav")
+#save as excel for better readability
+write_xlsx(nsse22.sav,"/Users/linlizhou/Documents/LASELL/data/NSSE_report/data/NSSE22 Data (Lasell).xlsx")
+#using tibble from excel
+nsse22<-read_excel("/Users/linlizhou/Documents/LASELL/data/NSSE_report/data/NSSE22 Data (Lasell).xlsx")
+
+#2018 data
+nsse18.sav<-read_sav("/Users/linlizhou/Documents/LASELL/data/NSSE_report/data/NSSE18 Data (Lasell College).sav")
+#save as excel for better readability
+write_xlsx(nsse18.sav,"/Users/linlizhou/Documents/LASELL/data/NSSE_report/data/NSSE18 Data (Lasell).xlsx")
+#using tibble from excel
+nsse18<-read_excel("/Users/linlizhou/Documents/LASELL/data/NSSE_report/data/NSSE18 Data (Lasell).xlsx")
+```
+
+```{r find vars of interest}
+#find pcid
+grep("[Ii][Dd]",names(nsse22),value=TRUE)#find student id
+nsse22$studentid[1:5]
+
+#find class
+grep("class",names(nsse22),value=TRUE)#find student id
+nsse22$IRclass[1:5]
+
+#find codebook
+lable<-sjlabelled::get_label(nsse22.sav)
+lable["IRclass"]#Institution-reported: Class level
+
+
+#select variable of interest in nsse22 (select and rename using lable from sav)
+nsse22.s<-nsse22%>%select("PCID"="studentid","Class"="IRclass","Higher-Order Learning"="HO", "Reflective and Integrative Learning"="RI","Learning Strategies"="LS","Quantitative Reasoning"="QR","Collaborative Learning"="CL","Discussions with Diverse Others"="DD","Student-Faculty Interaction"="SF","Effective Teaching Practices"="ET","Quality of Interactions"="QI","Supportive Environment"="SE")%>%
+  mutate(Year="2022")#prep for merge to distinguish data from 2022
+
+
+#do the same for nsse18 (since they have the same structure each year)#only studentID in 18 is different from studentid in 22
+nsse18.s<-nsse18%>%select("PCID"="studentID","Class"="IRclass","Higher-Order Learning"="HO", "Reflective and Integrative Learning"="RI","Learning Strategies"="LS","Quantitative Reasoning"="QR","Collaborative Learning"="CL","Discussions with Diverse Others"="DD","Student-Faculty Interaction"="SF","Effective Teaching Practices"="ET","Quality of Interactions"="QI","Supportive Environment"="SE")%>%
+  mutate(Year="2018")#prep for merge to distinguish data from 2018
+
+```
+
+```{r no match}
+ns1822<-inner_join(x=nsse22.s,y=nsse18.s,by="PCID",suffix=c(".18",".22"))#zero match of PCID
+ns1822<-merge(x=nsse22.s,y=nsse18.s,by="PCID",suffix=c(".18",".22"))#zero match of PCID
+```
+
+```{r general comparison using full dataset}
+ns1822<-full_join(x=nsse22.s,y=nsse18.s)#383=212+171
+```
+
+```{r compare 18-22 by class for HO}
+ns1822%>%group_by(Year,Class)%>%
+  summarise(score=mean(`Higher-Order Learning`,na.rm=T))%>%#claculate mean of HO by group
+  ggplot(aes(x=factor(Class),y=score,fill=factor(Class)))+#make class a factor to display as categorical var properly
+  geom_bar(stat="identity",position = position_dodge(),width=.8)+
+  geom_text_repel(aes(label=round(score,digits=0)),color="black",size=4,position= position_nudge())+
+  facet_wrap(~Year)+
+  theme_lz()+#rm legend, axis
+  scale_fill_manual(values = c(mycolors[2],mycolors[1]), name="Class")
+```
+
+
+
+```{r table}
+ns1822%>%group_by(Year,Class)%>%
+  summarise(`Higher-Order Learning`=mean(`Higher-Order Learning`,na.rm=T),
+           `Reflective and Integrative Learning`=mean(`Reflective and Integrative Learning`,na.rm=T),
+            `Learning Strategies`=mean(`Learning Strategies`,na.rm=T),
+            `Quantitative Reasoning`=mean(`Quantitative Reasoning`,na.rm=T),
+            `Collaborative Learning`=mean(`Collaborative Learning`,na.rm=T),
+            `Discussions with Diverse Others`=mean(`Discussions with Diverse Others`,na.rm=T),
+            `Student-Faculty Interaction`=mean(`Student-Faculty Interaction`,na.rm=T),
+            `Effective Teaching Practices`=mean(`Effective Teaching Practices`,na.rm=T),
+            `Quality of Interactions`=mean(`Quality of Interactions`,na.rm=T),
+            `Supportive Environment`=mean(`Supportive Environment`,na.rm=T)
+            )%>%
+  kable(caption = "Mean of NSSE Indicators \\label{tab:mean}") %>%
+  kable_styling(latex_options = "HOLD_position")
+  
+```
+
+
+
+```{r using general margin of error given sample size}
+#formula to calculate sample size for binominal distribution (use proportion for sd)
+#sample size = Z^2 * p(1-p) / moe^2
+
+#formula to calculate sample size for normal distribution (use the variance (sd) itself for continous variable)
+#sample size = Z^2 * sd(1-sd) / moe^2
+
+#formula to calculate margin of error for binominal distribution
+#moe=sqrt (  Z^2 * sd(1-sd) / sample size  )  = z*sd / sqrt(n)
+    #we usually use .5 for sd, just a mean for any estimated possible variance
+
+#for nsse1822 which sample size is 383
+ sqrt ( (1.96)^2*(.5)^2/ 383)# 5% margin of error 
+# -- 95% confidence to have the answer 
+# -- the proportion of seleting the answer is between (original prt - 5%, original prt + 5%)
+
+#for nsse18 which sample size is 212
+ sqrt ( (1.96)^2*(.5)^2/ 212) # 6%
+ 
+#for nsse22 which sample size is 172
+ sqrt ( (1.96)^2*(.5)^2/ 171) #7%
+```
+
+```{r calcualte margin of error for each question}
+#formula is: margin of error = z score * sigma/ sqrt(n)
+    #sigma is the sample standard deviation, sometimes we just use sd to represent it
+
+# functionize repeated calculation procedure
+moe<-function(x) {
+  sd(x,na.rm=T)/sqrt( length(x) - sum( is.na(x) ) )*1.96
+}
+
+#moe for ho
+  moe.18<-c(
+moe(nsse18.s$`Higher-Order Learning`),
+
+moe(nsse18.s$`Reflective and Integrative Learning`),
+
+moe(nsse18.s$`Learning Strategies`),
+
+moe(nsse18.s$`Quantitative Reasoning`),
+
+moe(nsse18.s$`Collaborative Learning`),
+
+moe(nsse18.s$`Discussions with Diverse Others`),
+
+moe(nsse18.s$`Student-Faculty Interaction`),
+
+moe(nsse18.s$`Effective Teaching Practices`),
+
+moe(nsse18.s$`Quality of Interactions`),
+
+moe(nsse18.s$`Supportive Environment`)
+            ) %>% 
+round(digits=0)#without any decimal
+  
+moe.22<-c(
+moe(nsse22.s$`Higher-Order Learning`),
+
+moe(nsse22.s$`Reflective and Integrative Learning`),
+
+moe(nsse22.s$`Learning Strategies`),
+
+moe(nsse22.s$`Quantitative Reasoning`),
+
+moe(nsse22.s$`Collaborative Learning`),
+
+moe(nsse22.s$`Discussions with Diverse Others`),
+
+moe(nsse22.s$`Student-Faculty Interaction`),
+
+moe(nsse22.s$`Effective Teaching Practices`),
+
+moe(nsse22.s$`Quality of Interactions`),
+
+moe(nsse22.s$`Supportive Environment`)
+            )%>% 
+round(digits=0)#without any decimal
+
+moe.name<-names(ns1822)[3:12]
+
+tibble(item=moe.name,moe18=moe.18,moe22=moe.22)# select 3.5 as margin of error (maximized)
+#tapply(list(nsse18.s[3:12]),moe())
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
