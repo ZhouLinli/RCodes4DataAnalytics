@@ -1,0 +1,564 @@
+---
+title: "**Science and Inquiry Knowledge and Perspectives (SIKP) Courses Review** \\vspace{-3cm}" 
+format: 
+  pdf:
+    documentclass: article
+    classoption: []
+    fig-width: 8
+    geometry:
+      - top=25mm
+      - bottom=20mm
+      - left=15mm
+      - right=15mm
+      - textwidth=4.5in
+    keep-md: true
+    include-in-header:
+      - text: |
+          \usepackage{titling}
+          \setlength{\droptitle}{-1.5in}
+          \pretitle{\begin{center}
+          \includegraphics[height=1in]{/Users/linlizhou/Documents/Rprojects/IR.png}\LARGE\\}
+      - text: |
+          \usepackage{fancyhdr}
+          \addtolength{\headheight}{0.7cm}
+    
+          \pagestyle{fancy} 
+          \fancyhead{}
+          \fancyfoot{}
+    
+          \fancyhead[LO]{\includegraphics[height=1.3cm]{/Users/linlizhou/Documents/Rprojects/IR.png}}
+          \fancyhead[RE]{\vspace{4mm}\textbf{AAC Courses Review}}
+          \fancyfoot[C]{\thepage}
+    
+          \renewcommand{\headrulewidth}{0pt}
+editor: visual
+---
+
+```{r yaml notes, include=FALSE}
+#change format: html (for render in Viewer) 
+#to the following for the word doc. version report
+#format: 
+#  docx:
+#    reference-doc: /Users/linlizhou/Documents/Rprojects/IR-Projects/lasell.report.template.docx
+#    prefer-html: true
+
+```
+
+```{r load.stucrs_1822allcrs, include=FALSE}
+#load all necessary packages and themes, global optin chunk
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R")
+
+#the following df are created from "/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R" 
+
+#grades of core courses: contains "Major", "GPA"/C("grade") for each "coursegroup" and "coursecode" by "term"(18fall-22spring)
+stucrs_1822allcrs<-read_xlsx("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Data and Analyses/Program Review/2022 Core Curriculum/data files/StudentInfoCourse_1822allcrs.xlsx")
+
+#mutate term
+stucrs_1822allcrs<-stucrs_1822allcrs%>%
+  mutate(term=paste(academic_year,academic_term,sep=" "),
+         term=factor(term,levels = c("2018 FALL","2019 SPRING","2019 FALL","2020 SPRING","2020 FALL","2021 SPRING","2021 FALL","2022 SPRING")))
+
+#recode term
+stucrs_1822allcrs$term<-
+  recode(stucrs_1822allcrs$term,
+         "2018 FALL"="2018 Fall","2019 SPRING"="2019 Spring",
+         "2019 FALL"="2019 Fall","2020 SPRING"="2020 Spring",
+         "2020 FALL"="2020 Fall","2021 SPRING"="2021 Spring",
+         "2021 FALL"="2021 Fall","2022 SPRING"="2022 Spring")
+
+#check: stucrs_1822allcrs%>%count(term); stucrs_1822allcrs%>%count(coursecode); stucrs_1822allcrs%>%count(Major)%>%View()
+```
+
+```{r filter.stucrs.si}
+#focus on course group "Scientific Inquiry & Problem Solving/Science and Inquiry Knowledge and Perspectives (SIKP)" 
+stucrs.si<-stucrs_1822allcrs%>%
+  filter(stucrs_1822allcrs$coursecode %in% 
+        c("BIO101", "BIO102", "BIO107", "BIO113", 
+          "CHEM105", "CHEM203", 
+          "ENV206", "ENV211", "ENV220", 
+          "MATH109", 
+          "CJ205",
+          "PHYS107","PHYS108","PHYS111", "PHYS112", 
+          "SCI103", "SCI104", "SCI105", "SCI106", "SCI107", "SCI114", "SCI115", "SCI117", "SCI118", "SCI119"))%>%unique()
+```
+
+```{r mutate.coursegrp}
+stucrs.si<-stucrs.si%>%mutate(coursegrp=case_when(
+  grepl("^BIO",coursecode)~"BIO",
+  grepl("^CHEM",coursecode)~"CHEM",
+  grepl("^ENV",coursecode)~"ENV",
+  grepl("^MATH",coursecode)~"MATH",
+  grepl("^CJ",coursecode)~"CJ",
+  grepl("^PHYS",coursecode)~"PHYS",
+  grepl("^SCI",coursecode)~"SCI"))#check:%>%count(coursegrp,coursecode)%>%View()
+```
+
+# Students Enrolled in SIKP Courses by Term
+
+```{r crscnt}
+#how many observation appeared for each course in each term:  
+tab.crscnt<-stucrs.si%>%count(term,coursecode)%>%
+pivot_wider(names_from="term",values_from="n",values_fill =0)%>%
+  select(coursecode,`2018 Fall`,`2019 Spring`,`2019 Fall`,`2020 Spring`,`2020 Fall`,`2021 Spring`,`2021 Fall`,`2022 Spring`)%>%arrange(coursecode)
+#check: are these appeared observations valid (unique and not drop and have a valid grade) students
+#stucrs.si%>%count(Add_Drop); stucrs.si%>%count(Final_Grade)# all add and valid grades
+#stucrs.si%>%count(term,coursecode,people_code_id)%>%count()#unique
+
+#format table as viz (format beautifully with kbl functions)
+viz.crscnt<-tab.crscnt%>%
+kbl(align = "c",booktabs = T,label="tab.label", caption = "SIKP Course Enrollment by Semester", col.names =c("",str_wrap(names(tab.crscnt)[2:ncol(tab.crscnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "5em",color="black")
+
+#conditional formatting
+cutraw<-stucrs.si%>%count(term,coursecode)%>%select(n)
+cut1<-(max(cutraw)-min(cutraw))*.6+min(cutraw)
+cut2<-(max(cutraw)-min(cutraw))*.4+min(cutraw)
+cut3<-(max(cutraw)-min(cutraw))*.2+min(cutraw)
+cut4<-1
+
+for (i in 2:ncol(tab.crscnt)){
+viz.crscnt<-
+column_spec(kable_input=viz.crscnt,column=i, width = "3em",color="white",
+            background =cf_color_blue(tab.crscnt[i],a=cut1,b=cut2,c=cut3,d=cut4))
+i=i+1; viz.crscnt}
+```
+
+```{r show.crscnt, fig.width=8,include=TRUE}
+viz.crscnt
+```
+
+# Distributions of Majors by Course Group
+
+Table @tbl-mjcnt summarizes distributions of students' major for each
+SIKP course groups. The table uses aggregated data across academic year
+2018-2022, and excludes majors with less than 2% percentage observations
+or missing a major value.
+
+```{r request notes}
+#optional: GPA/grades changes by term; GAP/grades by major
+```
+
+```{r mjcnt}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.mjcnt<-stucrs.si%>%group_by(coursegrp,Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%
+  select(-n)%>%filter(prt>.02 & !is.na(Major))%>%#only show a portion
+  pivot_wider(names_from=coursegrp,values_from=prt,values_fill=0)%>%arrange(Major)#reorder
+
+tab.mjcnt<-tab.mjcnt%>%  
+  #other majors: 
+  rbind(c(Major="Other Majors",1-colSums(tab.mjcnt[-1])))%>%#check:tail(2)
+  mutate(across(names(tab.mjcnt)[-1], function(x) percent(x, digit=0)))#change prt to %
+
+#format table as viz (format beautifully with kbl functions)
+viz.mjcnt<-tab.mjcnt%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.mjcnt)[2:ncol(tab.mjcnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+cutraw<-tab.mjcnt%>%pivot_longer(cols=c(BIO:SCI),names_to="coursegrp",values_to="prt")%>%select(prt)
+cut1<-(max(cutraw)-min(cutraw))*.6+min(cutraw)
+cut2<-(max(cutraw)-min(cutraw))*.2+min(cutraw)
+cut3<-0.075
+cut4<-0
+
+for (i in 2:ncol(tab.mjcnt)){
+viz.mjcnt<-
+column_spec(kable_input=viz.mjcnt,column=i, width = "3em",color="white",
+            background =cf_color_blue(tab.mjcnt[i],a=cut1,b=cut2,c=cut3,d=cut4))
+i=i+1; viz.mjcnt}
+
+#correct the other major row
+viz.mjcnt<-viz.mjcnt%>%row_spec(nrow(tab.mjcnt),color = color_grey,background = "white")
+```
+
+```{r show.mjcnt, fig.width=8,include=TRUE}
+#| label: tbl-mjcnt
+#| tbl-cap: "Distributions of Majors by Course Groups"
+viz.mjcnt
+```
+
+```{r explainhiddenplots}
+#Plots below summarize distributions of students' major for each SIKP course groups. Plots are created using aggregated data across academic year 2018-2022. All plots below excluded majors with less than 2% percentage and observations that has a missing major value.
+```
+
+```{r viz_bio.major}
+viz_bio.major<-stucrs.si%>%filter(grepl("^BIO",coursecode))%>%#check: %>%count(coursecode)
+  group_by(Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%arrange(-prt)%>%#check:View()
+  select(-n)%>%filter(prt>.02)%>%filter(!is.na(Major))%>%
+
+ggplot(aes(y=reorder(Major,prt), x = prt)) +  #y=factor(itemvar/yvar, levels = setyorder$yorder, ordered = TRUE), 
+  geom_bar(stat="identity",position = position_dodge(),width=0.9,fill=color_bluelight)+#position = position_stack(),width=0.9
+    scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=if_else(prt>0.02,as.character(percent(prt,digits = 0)),"")),#do not show anything less than error terms, to avoid overlapping labels as well
+                     size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+
+   labs(title="BIO Courses",x="",y="")+ theme_lz()+theme(axis.text.y = element_text())
+```
+
+```{r viz_chem.major}
+viz_chem.major<-stucrs.si%>%filter(grepl("^CHEM",coursecode))%>%#check: %>%count(coursecode)
+  group_by(Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%arrange(-prt)%>%#check:View()
+  select(-n)%>%filter(prt>.02)%>%filter(!is.na(Major))%>%
+
+ggplot(aes(y=reorder(Major,prt), x = prt)) +  #y=factor(itemvar/yvar, levels = setyorder$yorder, ordered = TRUE), 
+  geom_bar(stat="identity",position = position_dodge(),width=0.9,fill=color_bluelight)+#position = position_stack(),width=0.9
+    scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=if_else(prt>0.02,as.character(percent(prt,digits = 0)),"")),#do not show anything less than error terms, to avoid overlapping labels as well
+                     size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+
+   labs(title="CHEM Courses",x="",y="")+ theme_lz()+theme(axis.text.y = element_text())
+```
+
+```{r viz_env.major}
+viz_env.major<-stucrs.si%>%filter(grepl("^ENV",coursecode))%>%#check: %>%count(coursecode)
+  group_by(Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%arrange(-prt)%>%#check:View()
+  select(-n)%>%filter(prt>.02)%>%filter(!is.na(Major))%>%
+
+ggplot(aes(y=reorder(Major,prt), x = prt)) +  #y=factor(itemvar/yvar, levels = setyorder$yorder, ordered = TRUE), 
+  geom_bar(stat="identity",position = position_dodge(),width=0.9,fill=color_bluelight)+#position = position_stack(),width=0.9
+    scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=if_else(prt>0.02,as.character(percent(prt,digits = 0)),"")),#do not show anything less than error terms, to avoid overlapping labels as well
+                     size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+
+   labs(title="ENV Courses",x="",y="")+ theme_lz()+theme(axis.text.y = element_text())
+```
+
+```{r viz_phys.major}
+viz_phys.major<-stucrs.si%>%filter(grepl("^PHYS",coursecode))%>%#check: %>%count(coursecode)
+  group_by(Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%arrange(-prt)%>%#check:View()
+  select(-n)%>%filter(prt>.02)%>%filter(!is.na(Major))%>%
+
+ggplot(aes(y=reorder(Major,prt), x = prt)) +  #y=factor(itemvar/yvar, levels = setyorder$yorder, ordered = TRUE), 
+  geom_bar(stat="identity",position = position_dodge(),width=0.9,fill=color_bluelight)+#position = position_stack(),width=0.9
+    scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=if_else(prt>0.02,as.character(percent(prt,digits = 0)),"")),#do not show anything less than error terms, to avoid overlapping labels as well
+                     size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+
+   labs(title="PHYS Courses",x="",y="")+ theme_lz()+theme(axis.text.y = element_text())
+```
+
+```{r viz_sci.major}
+viz_sci.major<-stucrs.si%>%filter(grepl("^SCI",coursecode))%>%#check: %>%count(coursecode)
+  group_by(Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%arrange(-prt)%>%#check:View()
+  select(-n)%>%filter(prt>.02)%>%filter(!is.na(Major))%>%
+
+ggplot(aes(y=reorder(Major,prt), x = prt)) +  #y=factor(itemvar/yvar, levels = setyorder$yorder, ordered = TRUE), 
+  geom_bar(stat="identity",position = position_dodge(),width=0.9,fill=color_bluelight)+#position = position_stack(),width=0.9
+    scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=if_else(prt>0.02,as.character(percent(prt,digits = 0)),"")),#do not show anything less than error terms, to avoid overlapping labels as well
+                     size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+
+   labs(title="SCI Courses",x="",y="")+ theme_lz()+theme(axis.text.y = element_text())
+```
+
+```{r viz_cj.major}
+viz_cj.major<-stucrs.si%>%filter(grepl("^CJ",coursecode))%>%#check: %>%count(coursecode)
+  group_by(Major)%>%summarise(n=n())%>%mutate(prt=n/sum(n))%>%arrange(-prt)%>%#check:View()
+  select(-n)%>%filter(prt>.02)%>%filter(!is.na(Major))%>%
+
+ggplot(aes(y=reorder(Major,prt), x = prt)) +  #y=factor(itemvar/yvar, levels = setyorder$yorder, ordered = TRUE), 
+  geom_bar(stat="identity",position = position_dodge(),width=0.9,fill=color_bluelight)+#position = position_stack(),width=0.9
+    scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=if_else(prt>0.02,as.character(percent(prt,digits = 0)),"")),#do not show anything less than error terms, to avoid overlapping labels as well
+                     size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+
+   labs(title="CJ Courses",x="",y="")+ theme_lz()+theme(axis.text.y = element_text())
+```
+
+```{r longdisplay.viz_major,fig.height=6}
+gridExtra::grid.arrange(viz_env.major,#19
+                        viz_sci.major,#18
+                        nrow=1, widths=c(1,1))
+```
+
+```{r middisplay.viz_major,fig.height=4}
+gridExtra::grid.arrange(viz_bio.major,#12
+                        viz_chem.major,#12
+                        nrow=1, widths=c(1,1))
+```
+
+```{r shortdisplay.viz_major,fig.height=2.8}
+gridExtra::grid.arrange(viz_cj.major,#3
+                        viz_phys.major, #9
+                        nrow=1, widths=c(1,1))
+```
+
+# Distributions of Majors by Individual Courses
+
+## BIO
+
+```{r biocnt}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.biocnt<-stucrs.si%>%filter(grepl("^BIO",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.biocnt<-tab.biocnt%>%rbind(c(Major="Other Majors",1-colSums(tab.biocnt[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.biocnt)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.biocnt<-tab.biocnt%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.biocnt)[2:ncol(tab.biocnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.biocnt)){
+viz.biocnt<-
+column_spec(kable_input=viz.biocnt,column=i, width = "4em",color="white",
+            background =cf_color_blue(tab.biocnt[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.biocnt}
+
+#correct the other major row
+viz.biocnt<-viz.biocnt%>%row_spec(nrow(tab.biocnt),color = color_grey,background = "white")
+```
+
+```{r show.biocnt, fig.width=8,include=TRUE}
+#| label: tbl-biocnt
+#| tbl-cap: "Distributions of Majors for BIO Courses"
+viz.biocnt
+```
+
+## CHEM
+
+```{r chemcnt}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.chemcnt<-stucrs.si%>%filter(grepl("^CHEM",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.chemcnt<-tab.chemcnt%>%rbind(c(Major="Other Majors",1-colSums(tab.chemcnt[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.chemcnt)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.chemcnt<-tab.chemcnt%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.chemcnt)[2:ncol(tab.chemcnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.chemcnt)){
+viz.chemcnt<-
+column_spec(kable_input=viz.chemcnt,column=i, width = "4em",color="white",
+            background =cf_color_blue(tab.chemcnt[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.chemcnt}
+
+#correct the other major row
+viz.chemcnt<-viz.chemcnt%>%row_spec(nrow(tab.chemcnt),color = color_grey,background = "white")
+```
+
+```{r show.chemcnt, fig.width=8,include=TRUE}
+#| label: tbl-chemcnt
+#| tbl-cap: "Distributions of Majors for CHEM Courses"
+viz.chemcnt
+```
+
+## ENV
+
+```{r envcnt}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.envcnt<-stucrs.si%>%filter(grepl("^ENV",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.envcnt<-tab.envcnt%>%rbind(c(Major="Other Majors",1-colSums(tab.envcnt[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.envcnt)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.envcnt<-tab.envcnt%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.envcnt)[2:ncol(tab.envcnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.envcnt)){
+viz.envcnt<-
+column_spec(kable_input=viz.envcnt,column=i, width = "4em",color="white",
+            background =cf_color_blue(tab.envcnt[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.envcnt}
+
+#correct the other major row
+viz.envcnt<-viz.envcnt%>%row_spec(nrow(tab.envcnt),color = color_grey,background = "white")
+```
+
+```{r show.envcnt, fig.width=8,include=TRUE}
+#| label: tbl-envcnt
+#| tbl-cap: "Distributions of Majors for ENV Courses"
+viz.envcnt
+```
+
+## PHYS
+
+```{r physcnt}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.physcnt<-stucrs.si%>%filter(grepl("^PHYS",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.physcnt<-tab.physcnt%>%rbind(c(Major="Other Majors",1-colSums(tab.physcnt[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.physcnt)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.physcnt<-tab.physcnt%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.physcnt)[2:ncol(tab.physcnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.physcnt)){
+viz.physcnt<-
+column_spec(kable_input=viz.physcnt,column=i, width = "4.5em",color="white",
+            background =cf_color_blue(tab.physcnt[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.physcnt}
+
+#correct the other major row
+viz.physcnt<-viz.physcnt%>%row_spec(nrow(tab.physcnt),color = color_grey,background = "white")
+```
+
+```{r show.physcnt, fig.width=8,include=TRUE}
+#| label: tbl-physcnt
+#| tbl-cap: "Distributions of Majors for PHYS Courses"
+viz.physcnt
+```
+
+## SCI
+
+```{r scicnt10}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.scicnt10<-stucrs.si%>%filter(grepl("^SCI10",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.scicnt10<-tab.scicnt10%>%rbind(c(Major="Other Majors",1-colSums(tab.scicnt10[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.scicnt10)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.scicnt10<-tab.scicnt10%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.scicnt10)[2:ncol(tab.scicnt10)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.scicnt10)){
+viz.scicnt10<-
+column_spec(kable_input=viz.scicnt10,column=i, width = "3em",color="white",
+            background =cf_color_blue(tab.scicnt10[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.scicnt10}
+
+#correct the other major row
+viz.scicnt10<-viz.scicnt10%>%row_spec(nrow(tab.scicnt10),color = color_grey,background = "white")
+```
+
+```{r show.scicnt10, fig.width=8,include=TRUE}
+#| label: tbl-scicnt10
+#| tbl-cap: "Distributions of Majors for SCI103-106 Courses"
+viz.scicnt10
+```
+
+```{r scicnt11}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.scicnt11<-stucrs.si%>%filter(grepl("^SCI11",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.scicnt11<-tab.scicnt11%>%rbind(c(Major="Other Majors",1-colSums(tab.scicnt11[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.scicnt11)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.scicnt11<-tab.scicnt11%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.scicnt11)[2:ncol(tab.scicnt11)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.scicnt11)){
+viz.scicnt11<-
+column_spec(kable_input=viz.scicnt11,column=i, width = "4em",color="white",
+            background =cf_color_blue(tab.scicnt11[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.scicnt11}
+
+#correct the other major row
+viz.scicnt11<-viz.scicnt11%>%row_spec(nrow(tab.scicnt11),color = color_grey,background = "white")
+```
+
+```{r show.scicnt11, fig.width=8,include=TRUE}
+#| label: tbl-scicnt11
+#| tbl-cap: "Distributions of Majors for SCI114, 115, 118 Courses"
+viz.scicnt11
+```
+
+## CJ
+
+```{r cjcnt}
+#count major (with toal row&col) for each coursecode across 18-22
+tab.cjcnt<-stucrs.si%>%filter(grepl("^CJ",coursecode))%>%
+  group_by(coursecode,Major)%>%
+  summarise(n=n())%>%mutate(prt=n/sum(n))%>%select(-n)%>%
+  filter(prt>.02 & !is.na(Major))%>%
+  pivot_wider(names_from=coursecode,values_from=prt,values_fill=0)%>%arrange(Major)
+
+tab.cjcnt<-tab.cjcnt%>%rbind(c(Major="Other Majors",1-colSums(tab.cjcnt[-1])))%>%
+  #check:tail(2) add "others" row
+  mutate(across(names(tab.cjcnt)[-1], function(x) percent(x, digit=0)))  #make numbers percentage
+
+#format table as viz (format beautifully with kbl functions)
+viz.cjcnt<-tab.cjcnt%>%
+kbl(align = "c",booktabs = T, col.names =c("",str_wrap(names(tab.cjcnt)[2:ncol(tab.cjcnt)],width = 3))) %>%
+#set in-text reference label, table title , header names
+kable_styling(latex_options = c('HOLD_position'), full_width = F, fixed_thead = T, font_size = 12,bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#set overall style
+column_spec(1, bold = F, border_right = F, background = "white", width = "20em",color="black")
+
+#conditional formatting
+
+for (i in 2:ncol(tab.cjcnt)){
+viz.cjcnt<-
+column_spec(kable_input=viz.cjcnt,column=i, width = "4em",color="white",
+            background =cf_color_blue(tab.cjcnt[i],a=.2,b=.1,c=.075,d=0))
+i=i+1; viz.cjcnt}
+
+#correct the other major row
+viz.cjcnt<-viz.cjcnt%>%row_spec(nrow(tab.cjcnt),color = color_grey,background = "white")
+```
+
+```{r show.cjcnt, fig.width=8,include=TRUE}
+#| label: tbl-cjcnt
+#| tbl-cap: "Distributions of Majors for CJ Courses"
+viz.cjcnt
+```
