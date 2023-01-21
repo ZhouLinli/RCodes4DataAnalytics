@@ -1,0 +1,427 @@
+---
+title: "IPEDS GradRate and Outcome Measure"
+format: pdf
+editor: visual
+---
+
+```{r libraries}
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R")
+```
+
+```{r load_retention.file}
+ret<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Data and Analyses/Retention/2022-2023/Interactive UG Retention Analysis.xlsx",sheet = "Data")
+
+#cohort here means: first time/non-transfer, first year/new, full time fall enrolled students 
+
+#for convinience of reporting
+#check: ret%>%count(ETHNICITY_REPORT_DESC)
+ret<-ret%>%mutate(
+  ETHNICITY_REPORT_DESC=if_else(ETHNICITY_REPORT_DESC=="Two or More Races","Two or more Races",ETHNICITY_REPORT_DESC),
+  ETHNICITY_REPORT_DESC=factor(ETHNICITY_REPORT_DESC,levels=c("Non Resident Alien","Hispanic","American Indian or Alaska Native","Asian","Black or African American","Native Hawaiian or Other Pacific Islander","White","Two or more Races","Race and Ethnicity Unknown")),
+  GENDER_CODE=if_else(GENDER_CODE=="F","Women","Men"))#check: %>%count(ETHNICITY_REPORT_DESC)
+```
+
+# Graduate Rate: 2016 cohort
+
+```{r fall16cohort}
+#graduate rate IPEDS report 150% of normal time (4 year *150%=6 year) as of the current year (Aug 2022). 
+#In other words, it focuses on students whose 6 year is the current 2022 year. 
+#Then it is the 2016 cohort. (2022-6=2016)
+coh16<-ret%>%filter(Cohort==2016)
+```
+
+```{r col01 confirm all2016ethgen}
+#eth(ETHNICITY_REPORT_DESC) and gender (GENDER_CODE) of cohort 2016 #check: 
+coh16%>%count(GENDER_CODE,ETHNICITY_REPORT_DESC)%>%pivot_wider(names_from=GENDER_CODE,values_from=n)
+
+
+```
+
+```{r col02 bachelorequal}
+#all 2016 cohort students are seeking a bachelor degree, no associate degree/UGcertificate awarded
+#so bachelor or equivalent degree seeking subcohort are the default/equal to previous col01 
+```
+
+```{r genderunknown}
+coh16%>%count(GENDER_CODE)#none gender unknown
+```
+
+## completion
+
+```{r col18 sixyr}
+#col 11 and 12 are for students other than a bachelor degree -- none of students
+# so report all 0s in col11 and 12
+
+#col 18: bachelor degree students (all 2016 cohort students), who complete within 6 years (150% completers)
+coh16%>%filter(`Grad Year`<=6)%>%#check: count(`Grad Year`)
+  group_by(GENDER_CODE,ETHNICITY_REPORT_DESC,.drop=FALSE)%>%summarise(n=n())%>%
+  pivot_wider(names_from=GENDER_CODE,values_from=n)
+```
+
+```{r col19.20 four.fiveyr}
+#bachelor degree's completion in 4 years
+coh16%>%filter(`Grad Year`<=4)%>%#check: count(`Grad Year`)
+  group_by(GENDER_CODE,ETHNICITY_REPORT_DESC,.drop=FALSE)%>%summarise(n=n())%>%
+  pivot_wider(names_from=GENDER_CODE,values_from=n)
+
+#bachelor degree's completion in EXACTLY 5 years
+coh16%>%filter(`Grad Year`==5)%>%#check: count(`Grad Year`)
+  group_by(GENDER_CODE,ETHNICITY_REPORT_DESC,.drop=FALSE)%>%summarise(n=n())%>%
+  pivot_wider(names_from=GENDER_CODE,values_from=n)
+```
+
+## still enroll
+
+```{r loadenroll22spring}
+enroll22fall<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
+#enroll22spring<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Spring/UG/Spring 2022 UG Backup Data.xlsx")
+```
+
+```{r stillenrollcol}
+#if enrolled in 22fall
+coh16<-coh16%>%mutate(
+  stillenroll22fall=if_else(
+  coh16$PC_ID %in% enroll22fall$`People Code Id`,"Yes","No"))
+```
+
+```{r col51 stillenrolled}
+#still enrolled are those who are "not graduated" and enrolled in 2022 fall or spring
+
+#number of still enrolled
+coh16%>%filter(is.na(Graduated))%>%#"not graduated"!!
+  filter(stillenroll22fall=="Yes")%>% #enrolled in fall
+count(GENDER_CODE,ETHNICITY_REPORT_DESC)#report their gender and ethnicity
+```
+
+## transfer out
+
+```{r}
+#waiting for clearinghouse data for transfer out
+```
+
+## grant
+
+```{r loadfin16}
+# finaid 2016 file contains: all students ENROLLED in 2016 fall, and thus include all students entered in 2016 fall (i.e. the 2016 cohort); ONLY students who received a finaid grant/load will be included in this file
+fin16<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Fin Aid Sharing/Fall 2016 freeze file.xlsx")
+#check: 
+#check no duplication: fin16%>%count(`Student Ssn`)%>%count(n)
+
+##find relevant vars
+fin16_aidcols<-fin16%>%select(`Student Ssn`,`Pell Award Calc`,`Sub awarded`)%>%
+  mutate(pell=if_else(`Pell Award Calc`>0,"receive","not receive"),
+         stafford=if_else(is.na(`Sub awarded`),"not receive",
+                    if_else(`Sub awarded`>0,"receive","not receive")))
+#check:fin16_aidcols%>%count(stafford,`Sub awarded`)
+
+
+```
+
+```{r coh16_fin}
+#add finvars to coh16
+coh16_fin<-left_join(coh16,fin16_aidcols,by=c("SSN"="Student Ssn"))# the same file is here /Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2016 freeze file.cleanCDS-B4.xlsx
+
+#check: coh16_fin%>%count(pell); coh16_fin%>%count(stafford)
+
+#if a student is not found in the fin16_aidcols, that means they do not receive any finaid
+#so need to convert any NA in pell and stafford to "not receive"
+coh16_fin<-coh16_fin%>%mutate(pell=if_else(is.na(pell),"not receive",pell),
+                              stafford=if_else(is.na(stafford),"not receive",stafford))
+
+
+```
+
+```{r stafford_exclusive}
+#a student may both receive pell and stafford -- while IPEDS need to report stafford that DID NOT receive a pell
+coh16_fin<-coh16_fin%>%mutate(stafford_exclusive=
+            if_else(pell=="not receive"&stafford=="receive",
+                    "yes (stafford exclusive)",
+                    "no"))# (at least one of the following: not receive stafford, receive pell"))
+
+#check: coh16_fin%>%count(pell); coh16_fin%>%count(stafford_exclusive)
+```
+
+```{r savecoh16_fin}
+wb<-createWorkbook()
+
+addWorksheet(wb,"cohort16fin")
+writeData(wb,"cohort16fin", x = coh16_fin)
+
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/IPEDS/2022-2023/Graduation Rates/cohort2016withfinaid.xlsx",overwrite = TRUE)
+```
+
+```{r report_grant_allcoh16}
+coh16_fin%>%count(pell,stafford_exclusive)#report pell receive and staffd_exclusive yes
+#easier than coh16_fin%>%count(pell,stafford)
+```
+
+```{r grant_6yrcompleter}
+#col18 and 29 are the same since we do not have completers who seek non-bachelor degree
+coh16_fin%>%filter(`Grad Year`<=6)%>%
+  count(pell,stafford_exclusive)
+```
+
+# Graduate Rate 200: 2014 cohort
+
+```{r fall14cohort}
+#graduate rate 200 IPEDS report 151-200% of normal time (>6 year and <=8 year) as of the current year (Aug 2022). 
+#In other words, it focuses on students whose 8th year is the current 2022 year and report their 6-8 year completion. 
+#Then it is the 2014 cohort. (2022-8=2014)
+coh14<-ret%>%filter(Cohort==2014)
+```
+
+```{r numberofstu6-8yr}
+coh14%>%filter(`Grad Year`<=8,`Grad Year`>6)%>%nrow()
+```
+
+```{r stillenroll}
+#22fall
+coh14%>%mutate(stillenroll22fall=if_else(
+  coh14$PC_ID %in% enroll22fall$`People Code Id`,
+  "Yes","No"
+))%>%count(stillenroll22fall)#one still enroll in 2022 fall
+```
+
+# Outcome Measure: new/fy student in 14fall &15spring
+
+```{r note focus on 2014cohort}
+#note: report a full year cohort
+##since it report 4,6,8 yr completion, the cohort we focus on would be 2014 cohort (to be able to report the latest 8yr completion)
+#if a student completed muti-degree, select the highest to report (bachelor>associate>certificate)
+```
+
+```{r report_items outcomemeasure}
+#pell vs non-pell receipients
+#1First-time, full-time entering (FTFT):14 cohort + 15SPRING newFTnon-transfer students
+#2First-time, part-time entering (FTPT): from 14Fall& 15SPRING backup without a cohort ID but still degree seeking; nontransfer part time
+#3Non-first-time, full-time entering (NFTFT) :from  14Fall& 15SPRING backup without a cohort ID but still degree seeking; transfer full time
+#4Non-first-time, part-time entering (NFTPT):from 14Fall& 15SPRING backup without a cohort ID but still degree seeking; transfer part time
+```
+
+```{r relevantvars_outcomemeasure}
+#so relavant vars include:
+
+#1.Degree and curriculum (exclude NON and LV students), college_attend (new/first-year-at-lasell/entering students only), transfer (determines first-time or not), FT/PT,  (2014 fall and 2015 spring backup data file )
+
+#2.pell and stafford (finaid data file for 2014 fall and 2015 spring enrolled students: /Volumes/lasellshare/Faculty_Staff_Shares$/IR/Fin Aid Sharing/14-15 final.xlsx)
+
+#3.completion year for 2014 cohort (ReportManager- Final List of Graduates By Date Range)
+## completion <=4yr: graduated during 2014fall(December) to 2018spring(May)/summer(August) 
+## completion 4-6yr= graduated during 2018fall(December) to 2020spring(May)/summer(August)
+## completion 6-8yr= graduated during 2020fall(December) to 2022spring(May)/summer(August)) 
+```
+
+## dgsknew14-15
+
+```{r load.enroll14fall/15spring}
+#full year degree seeking students include: degree-seeking, entering/new students in 2014 fall and 2015 spring backup data
+
+#1.Degree and curriculum (exclude NON and LV students), college_attend (new/first-year-at-lasell/entering students only), transfer (determines first-time or not), FT/PT,  (2014 fall and 2015 spring backup data file )
+
+enroll14fall<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2014 Fall/Undergraduate/Copy of UGFall2014BackUpData REVISED 1.5.14.xls",skip = 3)
+  
+enroll15spring<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2015 Spring/UG/UGSpringFinal2015BackUpDataReport.xlsx",skip = 3)
+```
+
+```{r dgsknew.enroll14fall.s/15spring.s}
+##enroll14fall.s
+#check: enroll14fall%>%count(Degree,Curriculum)%>%View()
+#enroll14fall%>%count(`College Attend`)
+#investigate NA college attend: enroll14fall%>%filter(is.na(`College Attend`))%>%select(`People Code Id`,Name,Degree,Curriculum,`Cohort Id`)#it's just the sum value rows
+
+#keep relevant vars among degree seeking entering students
+enroll14fall.s<-enroll14fall%>%
+  filter(Degree %in% c("BA","BS"),#degree seeking students: #exclude AA (LasellVilliage students) and NON nonmatriculated students and all other number null values
+         `College Attend`=="NEW")%>%#entering students
+  select(`People Code Id`,Name,#basic info
+         `Birth Date`,`Cohort Id`,Degree,Curriculum,`Res/Comm`,#tentative-useful var
+         Gender,Ethnicity,`Transfer YN`,`FT/PT`)#ipeds report var
+#check:enroll14fall.s%>%count(`People Code Id`)%>%count(n)  #unique rows
+
+##enroll15spring.s
+#check: enroll15spring%>%count(Degree,Curriculum)%>%View()
+#enroll15spring%>%count(`College Attend`)
+#investigate NA college attend: enroll15spring%>%filter(is.na(`College Attend`))%>%select(`People Code Id`,Name,Degree,Curriculum,`Cohort Id`)#it's just the sum value rows
+
+#keep relevant vars among degree seeking entering students
+enroll15spring.s<-enroll15spring%>%
+  filter(Degree %in% c("BA","BS"),#degree seeking students:#exclude AA (LasellVilliage students) and NON nonmatriculated students and all other number null values
+         `College Attend`=="NEW")%>%#entering students
+  select(`People Code Id`,Name,#basic info
+         `Birth Date`,`Cohort Id`,Degree,Curriculum,`Res/Comm`,#tentative-useful var
+         Gender,Ethnicity,`Transfer YN`,`FT/PT`)#ipeds report var
+#check:enroll15spring.s%>%count(`People Code Id`)%>%count(n)  #unique rows
+```
+
+```{r enroll14_15(dgsknew.unique)}
+#if already in enroll14fall then keep it: enroll14fall.s
+#if not in enroll14fall.s, then add those from enroll15spring.s
+enroll15spring.s_new<-enroll15spring.s%>%
+  filter(! enroll15spring.s$`People Code Id` %in% enroll14fall.s$`People Code Id`)#52 new students in 15 spring that are not in 14fall
+
+#construct enroll14_15 from all in enroll14fall.s and the new students in enroll15spring.s (i.e.enroll15spring.s_new)
+#check:names(enroll14fall.s);names(enroll15spring.s_new) # all the same
+enroll14_15<-full_join(enroll14fall.s,enroll15spring.s_new)
+#check: enroll14_15%>%count(`People Code Id`)%>%count(n)#unqiue 622 students
+```
+
+## adding finaid cols
+
+```{r loadselect.finaid14_15.s}
+finaid14_15<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Fin Aid Sharing/14-15 final.xlsx")
+finaid14_15.s<-finaid14_15%>%select(`Student Ssn`,`Stafford Paid`,`Pell Award Calc`,`Last Name`,`First Name`,`Cohort year`)
+#checkfinaid14_15.s%>%count(`Student Ssn`)%>%count()#yes, unique ssns
+
+```
+
+```{r loadselect.dmt14_15.s}
+#finaid cols ready to be mutated into enroll14_15
+#however, we need to find the matching-var which is ssn
+
+#then, let's find/mutate ssn for each enroll14_15 students
+
+#load dmt
+dmt14fall<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Datamart Files/Test Run of Data Mart/Fall 2014/Undergrad_Fall_2014_12312014.xlsx")
+dmt15spring<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Datamart Files/Test Run of Data Mart/Spring 2015/Spring 2015 02052014.xlsx")
+dmt14_15<-full_join(dmt14fall,dmt15spring)
+dmt14_15.s<-dmt14_15%>%select(SSN,PC_ID)%>%unique()#removed duplication
+```
+
+```{r enroll14_15.dmt(ssn)}
+#using PCID to match
+enroll14_15.dmt<-left_join(enroll14_15,dmt14_15.s,by=c("People Code Id"="PC_ID"))
+#check: enroll14_15.dmt%>%count(SSN)%>%count(n) #no duplication no NA, good
+```
+
+```{r enroll14_15.finaid}
+#now we found all ssn col to enroll14_15 (based on dmt), we can then mutate finaid cols by matching ssn
+
+#first we need to convert SSN to the same NUMERIC type (numeric will remove the starting zeros in the ssn!)
+#check: str(enroll14_15.dmt$SSN)#character
+enroll14_15.dmt$SSN<-as.numeric(enroll14_15.dmt$SSN)#now numeric
+#check: class(finaid14_15.s$`Student Ssn`)#numeric
+
+#ready to match (to mutate finaid cols based on ssn)
+enroll14_15.fin<-left_join(enroll14_15.dmt,finaid14_15.s,by=c("SSN"="Student Ssn"))
+#check:enroll14_15.fin%>%count(is.na(`Stafford Paid`))#580 out of 622 students received finaid (matched in finaid)
+
+#check: all cohort 2014 students should find a ssn match in the enroll1415 data
+# finaid14_15%>%filter(`Cohort year`==2014)%>%nrow()#485 students, sounds good
+
+
+```
+
+```{r factorize for convnience reporting}
+#for convnience of reporting, construct pell vs nonpell col
+enroll14_15.fin<-enroll14_15.fin%>%
+  #if>0 then received pell, if na or =0 then non-pell
+  mutate(pell=case_when(`Pell Award Calc`>0~"pell",
+                        `Pell Award Calc`==0~"non-pell",
+                        is.na(`Pell Award Calc`)~"non-pell"))#check: %>%count(pell,`Pell Award Calc`)%>%View()
+
+#factorizing/ recoding
+enroll14_15.fin<-enroll14_15.fin%>%
+  mutate(pell=factor(pell,levels=c("pell","non-pell")),
+         `Transfer YN`=recode(`Transfer YN`,"Y"="Nonfirsttime/Transfer","N"="Firsttime"))
+```
+
+## adding completion
+
+```{r loadselect.complete14_22.s}
+#load (ReportManager- Final List of Graduates By Date Range 11/1/2014-9/1/2022) 
+complete14_22<-read_csv("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/IPEDS/2022-2023/Graduation Rates/Final List of Graduates By Date Range%2DIncluding Certs.csv")
+complete14_22.s<-complete14_22%>%select(textbox41,DEGREE,textbox4,last_name)%>%unique()%>%
+  rename(ppid=textbox41,graddate=textbox4,name=last_name,degreeawarded=DEGREE)
+#check:complete14_22.s%>%count(textbox41)%>%count() #unique
+```
+
+```{r enroll14_15.complete}
+enroll14_15.complete<-left_join(enroll14_15.fin,complete14_22.s,by=c("People Code Id"="ppid")) #only find 416 graduated students, meaning 226 not received a degree from lasell, which is similar to last year's reporting number, reasonable
+
+# from 622 to 642, meaning 20 students received both UG and GD degree
+#check: enroll14_15.complete%>%count(degreeawarded)
+enroll14_15.complete<-enroll14_15.complete%>%filter(! grepl("^M",degreeawarded))
+#check:%>% count(degreeawarded)
+```
+
+```{r col.completeyear}
+#create col: completion year for 2014 cohort 
+enroll14_15.complete<-enroll14_15.complete%>%mutate(graddate=mdy(graddate))%>%#convert to date first
+  mutate(completeyr=case_when(
+##completion <=4yr: graduated during 2014fall(December) to 2018spring(May)/summer(August)
+    graddate<"2018-09-01" ~"within 4yr",
+    
+##completion 4-6yr= graduated during 2018fall(December) to 2020spring(May)/summer(August)
+    graddate>"2018-09-01"&graddate<"2020-09-01" ~"4-6yr",
+
+##completion 6-8yr= graduated during 2020fall(December) to 2022spring(May)/summer(August)
+    graddate>"2020-09-01"&graddate<"2022-09-01" ~"6-8yr",
+
+    is.na(graddate) ~ "no grad date"))#check: %>%count(graddate,completeyr)
+```
+
+```{r compyr.conviniencereporting}
+enroll14_15.complete<-enroll14_15.complete%>%
+  mutate(comp4yr=if_else(completeyr=="within 4yr","yes4yr","no4yr"),
+         comp6yr=if_else(completeyr %in% c("within 4yr","4-6yr"),"yes6yr","no6yr"),
+         comp8yr=if_else(completeyr %in% c("within 4yr","4-6yr","6-8yr"),"yes8yr","no8yr"))
+```
+
+## still enroll
+
+```{r stillenroll14_15}
+#loadenroll22fall: enroll22fall<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
+#still enroll in 22fall
+enroll14_15.complete<-enroll14_15.complete%>%
+  mutate(stillenroll22fall=if_else(
+  enroll14_15.complete$`People Code Id` %in% enroll22fall$`People Code Id`,
+  "Yes","No"))#check:%>%count(stillenroll22fall)#one still enroll in 2022 fall
+```
+
+## transfer: await transfer data from clearinghouse
+
+## save outcome measure dfs
+
+```{r save.enroll14_15withfinaid}
+wb<-createWorkbook()
+addWorksheet(wb,"enroll14_15.complete"); writeData(wb,"enroll14_15.complete", x = enroll14_15.complete)
+addWorksheet(wb,"enroll14_15.fin"); writeData(wb,"enroll14_15.fin", x = enroll14_15.fin)
+addWorksheet(wb,"rawenroll14_15.ssn"); writeData(wb,"rawenroll14_15.ssn", x = enroll14_15.dmt)
+addWorksheet(wb,"rawfinaid14_15"); writeData(wb,"rawfinaid14_15", x = finaid14_15.s)
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/IPEDS/2022-2023/Graduation Rates/enroll14_15withfinaid.xlsx",overwrite = TRUE)
+```
+
+# Report Outcome Measure: establishing cohorts
+
+```{r establishingcohort}
+#transfer and FT/PT determines the four subgroups:
+#FTFT: nontransfer, fulltime
+#FTPT: nontransfer, parttime
+#NFTFT: transfer, fulltime
+#NFTPT: transfer, parttime
+#and by pell/non-pell col
+
+enroll14_15.fin%>%group_by(`Transfer YN`,`FT/PT`,pell,.drop = FALSE)%>%count()
+```
+
+```{r awardstatus4yr}
+#check: enroll14_15.complete%>%count(completeyr)
+enroll14_15.complete%>%filter(comp4yr=="yes4yr")%>%
+  group_by(`Transfer YN`,`FT/PT`,pell,.drop = FALSE)%>%count()
+```
+
+```{r awardstatuswithin6yr}
+enroll14_15.complete%>%filter(comp6yr=="yes6yr")%>%
+  group_by(`Transfer YN`,`FT/PT`,pell,.drop = FALSE)%>%count()
+```
+
+```{r awardstatuswithin8yr}
+enroll14_15.complete%>%filter(comp8yr=="yes8yr")%>%
+  group_by(`Transfer YN`,`FT/PT`,pell,.drop = FALSE)%>%count()
+```
+
+```{r stillenroll}
+#check: enroll14_15.complete%>%count(stillenroll22fall)
+enroll14_15.complete%>%filter(stillenroll22fall=="Yes")%>%
+  group_by(`Transfer YN`,`FT/PT`,pell,.drop = FALSE)%>%count()
+```

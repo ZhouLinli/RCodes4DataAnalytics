@@ -1,0 +1,538 @@
+---
+title: "CommonDataset"
+author: "Linli Zhou"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R")
+#any enrollment is fall 2022; 
+#any completion is academic year 2021-2022
+
+#"c&d-admission; #h-financialaid; g-business office (we can fill out this year2022); #i-2)faculty-eric turner/aca affairs 3)once get faculty we calculate ratio; 
+#i-1)class size: registar#the rest we can do (a,b,e,f,j) e/f-might be a question for someone else#b(UG part)/j can complete now"
+```
+
+#CDS-I: Class Size
+
+```{r load reg crs data}
+# 22Fall UG class size (including online classes)
+# section: course for credit (exclude individual instruction/ intern/practicums/ independent study), count cross-reg only once
+# sub-section: supplementary (e.g. lab, recitation, discussion session) to a course for credit and non-individual (defined above)
+
+#data source: registar's office already have a clean course file: removed duplicated cross-registration, removed individual courses
+crstabs<-excel_sheets("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Course Count FA'22.xlsx")
+## results:"Course Count"     "Recitations"      "Labs"             "Directed Studies"
+sec.crscnt<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Course Count FA'22.xlsx",sheet = crstabs[1])
+subsec.recit<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Course Count FA'22.xlsx",sheet =crstabs[2])
+subsec.lab<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Course Count FA'22.xlsx",sheet = crstabs[3])
+```
+
+
+```{r clean section subsection}
+#clean data
+sec.crscnt<-sec.crscnt%>%
+  #class size of each course
+  mutate(size=case_when(`Current Enrollment`>=2 & `Current Enrollment`<=9 ~ "2-9",
+                        `Current Enrollment`>=10 & `Current Enrollment`<=19 ~ "10-19",
+                        `Current Enrollment`>=20 & `Current Enrollment`<=29 ~ "20-29",
+                        `Current Enrollment`>=30 & `Current Enrollment`<=39 ~ "30-39",
+                        `Current Enrollment`>=40 & `Current Enrollment`<=49 ~ "40-49",
+                        `Current Enrollment`>=50 & `Current Enrollment`<=99 ~ "50-99",
+                        `Current Enrollment`>=100~ "100+"))
+
+#distinguish two types of subsec
+subsec.lab<-subsec.lab%>%mutate(type="lab")
+subsec.recit<-subsec.recit%>%mutate(type="recitation")
+#merge the two types of subsection together
+subsec<-full_join(subsec.lab,subsec.recit)%>%
+  #class size of each subsection
+  mutate(size=case_when(`Current Enrollment`>=2 & `Current Enrollment`<=9 ~ "2-9",
+                        `Current Enrollment`>=10 & `Current Enrollment`<=19 ~ "10-19",
+                        `Current Enrollment`>=20 & `Current Enrollment`<=29 ~ "20-29",
+                        `Current Enrollment`>=30 & `Current Enrollment`<=39 ~ "30-39",
+                        `Current Enrollment`>=40 & `Current Enrollment`<=49 ~ "40-49",
+                        `Current Enrollment`>=50 & `Current Enrollment`<=99 ~ "50-99",
+                        `Current Enrollment`>=100~ "100+"))
+
+#merge to one file
+sec.crscnt<-sec.crscnt%>%mutate(type="section")
+#merge sec with subsec
+classsize<-full_join(sec.crscnt, subsec)
+```
+
+
+```{r save classsize}
+#save the two sheets
+#load raw
+wb<-loadWorkbook("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Course Count FA'22.xlsx")
+#add new sheet "clean" on raw
+addWorksheet(wb,"clean")
+#assign classsize as clean sheet
+writeData(wb,"clean", x = classsize)
+
+#check names: names(wb)
+#set order of sheets
+worksheetOrder(wb) <- c(5,1,2,3,4)
+#save all in a new file
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Course Count FA'22_cleanCDS-I.xlsx",overwrite = TRUE)
+```
+
+
+#CDS-B1,2 and F: UG Fall Enrollment
+
+```{r load UGbackup}
+#find list of "degree-seeking" UG, and "first-time, first-year degree-seeking" UG, both enrolled in 22Fall (include FT&PT)
+enrolled22fa<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")#The one in IR Reports is an unofficial file
+#check each cols: lapply(enrolled22fa[,9:28], unique)
+```
+
+
+```{r degseek}
+#list of "degree-seeking" UG
+enrolled22fa<-enrolled22fa%>%mutate(degreeseek=
+          if_else(Degree=="NON"| #"BS", "AA", "BA", "CER"
+                    Program=="LV", #exclude lasell villiage: Any Lasell Village student is non-matriculated, it does not matter what the indication in the degree column is. 
+                  "N","Y"))#check:enrolled22fa%>%count(degreeseek)
+
+#degseek<-enrolled22fa%>%filter(Degree!="NON", #"BS", "AA", "BA", "CER"
+#                               Program!="LV")#exclude lasell villiage: Any Lasell Village student is non-matriculated, it does not matter what the indication in the degree column is.  
+#check each cols: lapply(degseek[,9:28], unique)
+```
+
+```{r explore degseek vars: LV - hardcode to non-matric}
+#explore:
+#LV is non matriculated or AA: Any Lasell Village student is non-matriculated, it does not matter what the indication in the degree column is.  
+enrolled22fa%>%filter(Program=="LV")%>%count(Degree)
+#non matriculated are non-matric and lasell village: enrolled22fa%>%filter(Degree=="NON")%>%count(Program,Curriculum)
+```
+
+
+```{r degseek.ftfy}
+#list of "first-time, first-year degree-seeking" UG
+degseek.ftfy<-enrolled22fa%>%filter(
+  degreeseek=="Y",#degree seeking students
+  
+  `Transfer YN`=="N",#not transfered-in (of all class level)->first time is at lasell
+  !str_detect(Curriculum, "[Cc]ompletion"), # not a completion program -- which is a non-trditional transfer student
+  
+  `College Attend`=="NEW")#new/ the first actual year in the institution
+```
+
+```{r understand classLevel and newCollegeAttend}
+#class level: not "real year in school", but coded based on cum credits (SO>30,JR>60,SR>90), : degseek%>%group_by(`Class level`)%>%count(`Cum Credits`,sort = TRUE)
+
+#college attend new: "new/first actual/literal year at Lasell" (instead of returning Lasell)
+degseek%>%filter(`College Attend`=="NEW")%>%count(`Transfer YN`)# transfer in, but new to lasell
+```
+
+
+```{r understand CohortId and Matric Year}
+#matric year and cohort IDs for degseek students:
+enrolled22fa%>%filter(Degree!="NON", Program!="LV")%>%#degseek students
+  count(`Matric Year`,`Cohort Id`)%>%#map matric and cohort
+  mutate(`Matric Year`=ymd(`Matric Year`,truncated = 2),
+         `Cohort Id`=ymd(`Cohort Id`,truncated = 2))%>%#format as date
+  mutate(diff=`Matric Year`-`Cohort Id`)%>%#diff between dates
+  mutate(diff=round(as.numeric(diff)/365,digits=0))%>%##reformat as diff in years
+  filter(diff!=0 | is.na(diff))%>%arrange(diff)%>%#see those inconsistency between matric and cohort
+  mutate(`Matric Year`=format(`Matric Year`,format="%Y"),
+         `Cohort Id`=format(`Cohort Id`,format="%Y"))#only care about year
+
+#comments from eric: 
+
+#cohort ID  (e.g. 2022, 2022 PT): first time, new (college attend column, i.e. first actual year at Lasell) in 2022, degree seeking students
+enrolled22fa%>%count(`Cohort Id`)# 2022 CER means: students in UG Surgical Technology, a 1-year certificate program
+#cohort ID interger (e.g. 2022) means full time: degseek%>%filter(`Cohort Id`=="2022")%>%count(`FT/PT`)
+enrolled22fa%>%filter(!is.na(`Cohort Id`))%>%count(Degree)#only BA, BS first time degree seeking
+
+#NA cohort ID: transfer (not first time), bachelor's completion (transfer students looking to complete a Bachelor's degree that they have already started), non-matrics (not degree-seeking), workforce development (not degree-seeking)
+enrolled22fa%>%filter(is.na(`Cohort Id`))%>%count(Degree)#non-matric, transfer students in BA/BS, Lasell Village students in AA, 
+#and CER surgical tech from previous years (2022 CER has a cohort ID)
+enrolled22fa%>%filter(Degree=="CER")%>%count(`Transfer YN`,Curriculum,`College Attend`)
+
+#Matric year: the first year in which the student was in a matriculated (matriculated is the same as degree-seeking) program.
+#For those with differences between the 2 codes, we would have to look them up individually to see what is going on, I don't think it's necessarily straight forward.
+```
+
+```{r verify degseek.ftfy with CohortId}
+#should be the same as cohort Id= 2022 ...(first time, new in 2022, degree seeking students)
+
+#two filters and not exactly cohort Id= 2022 ...: have two extra NA
+degseek%>%filter(`Transfer YN`=="N",
+                 `College Attend`=="NEW",)%>%
+  count(`Cohort Id`)# the NA are from bachelor's completion program(non-traditional transfer student)
+
+#three filters and exactly cohort Id= 2022 ...
+degseek%>%filter(`Transfer YN`=="N",
+                 !str_detect(Curriculum, "[Cc]ompletion"), 
+                 `College Attend`=="NEW",)%>%
+  count(`Cohort Id`)#remove curriculum contains completion (not first time students), then removed NA
+
+#so it's correct to use the three filters to identify first time first year students
+```
+
+```{r combine degseek and degseek.fyft as one df}
+enrolled22fa<-enrolled22fa%>%mutate(fyft=if_else(
+  enrolled22fa$`People Code Id`%in%degseek.ftfy$`People Code Id`,
+  "Y","N"))#check:%>%count(fyft)
+#check:fyft "Y" is same with nrow(degseek.ftfy) #324 first time new/first year students
+
+#check no duplication: enrolled22fa%>%group_by(`People Code Id`)%>%count()%>%group_by(n)%>%count()#1236degseek students;1247all enrolled students
+```
+
+
+
+```{r load dmt-out of state}
+#read 22fall dmt
+dmtfa22<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Datamart Files/Test Run of Data Mart/FALL 2022/Test_run_datamart_FALL_ALL_sessions_20220926.xlsx")
+
+#admit state column
+#check:dmtfa22%>%select(starts_with("ADMIT"))%>%lapply(unique)#country and region are relevant
+#explore 21+66 country NA: dmtfa22%>%filter(is.na(ADMIT_COUNTRY))%>%count(ADMIT_REGION,ADMIT_STATE)%>%View()# 21 have region values of US
+#explore 33+66 region NA:dmtfa22%>%filter(is.na(ADMIT_REGION))%>%count(ADMIT_COUNTRY,ADMIT_STATE)%>%View() # 33 have region values of US
+#decide to merge first then, in the merged list, fill in NAs
+
+#select state relevant cols
+dmtfa22.state<-dmtfa22%>%select(PC_ID,ADMIT_STATE,ADMIT_COUNTRY,ADMIT_REGION)
+```
+
+```{r merge enrolled22fa.full}
+#merge
+enrolled22fa.full<-left_join(enrolled22fa,dmtfa22.state,by=c("People Code Id"="PC_ID"))%>%#check names(enrolled22fa.full)
+  unique()%>%##remove rows that has exact same value across all columns; no duplication now
+  rename(ppid=`People Code Id`)#for convnience
+#check duplication: enrolled22fa.full%>%group_by(ppid)%>%count()%>%group_by(n)%>%count()#1247enrolled22fa.full students
+
+#see what are the values: enrolled22fa.full%>%select(ADMIT_STATE,ADMIT_COUNTRY,ADMIT_REGION)%>%lapply(unique) #NA in state/country/region  
+#see NA: enrolled22fa.full%>%filter(is.na(ADMIT_COUNTRY)|is.na(ADMIT_REGION)|is.na(ADMIT_STATE))%>%select(ADMIT_STATE,ADMIT_COUNTRY,ADMIT_REGION)
+```
+
+```{r recode admit state_region_country}
+#use one to fill each other
+##recode country for counvience: enrolled22fa.full%>%count(ADMIT_COUNTRY)
+enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_COUNTRY=
+              if_else(is.na(ADMIT_COUNTRY),ADMIT_COUNTRY,
+                 if_else(ADMIT_COUNTRY=="United States","US","intl")))#check:%>%count(ADMIT_COUNTRY)
+
+##recode region for counvience: enrolled22fa.full%>%count(ADMIT_REGION)
+enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_REGION=
+              if_else(is.na(ADMIT_REGION),ADMIT_REGION,
+                 if_else(ADMIT_REGION=="Massachusetts","MA",
+                      if_else(ADMIT_REGION%in%c("Other New England","Other US"),"other states","intl"))))#check:%>%count(ADMIT_REGION)    
+
+##recode state for convinience: enrolled22fa.full%>%count(ADMIT_STATE)%>%View()
+enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_STATE=
+              if_else(is.na(ADMIT_STATE),ADMIT_STATE,
+                 if_else(ADMIT_STATE%in%c("MA","Massachusetts"),"MA",
+                      if_else(ADMIT_STATE%in%c("AL",  "AK",  "AZ",  "AR",  "CA",  "CO",  "CT",  "DE",  "FL",  "GA",  "HI",  "ID",  "IL",  "IN",  "IA",  "KS",  "KY",  "LA",  "ME",  "MD",  "MI",  "MN",  "MS",  "MO",  "MT",  "NE",  "NV",  "NH",  "NJ",  "NM",  "NY",  "NC",  "ND",  "OH",  "OK",  "OR",  "PA",  "RI",  "SC",  "SD",  "TN",  "TX",  "UT",  "VT",  "VA",  "WA",  "WV",  "WI",  "WY","Maine"),"other states","intl"))))   #check:enrolled22fa.full%>%count(ADMIT_STATE)# AE (United Arab Emirates) is coded as intl
+```
+
+```{r fill region NA}
+#check: enrolled22fa.full%>%select(ADMIT_STATE,ADMIT_COUNTRY,ADMIT_REGION)%>%lapply(unique)
+#see NA: enrolled22fa.full%>%filter(is.na(ADMIT_COUNTRY)|is.na(ADMIT_REGION)|is.na(ADMIT_STATE))%>%select(ADMIT_STATE,ADMIT_COUNTRY,ADMIT_REGION)
+
+#use region to fill country: enrolled22fa.full%>%count(ADMIT_COUNTRY); enrolled22fa.full%>%count(ADMIT_REGION)
+#enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_COUNTRY=
+#              if_else(!is.na(ADMIT_COUNTRY),ADMIT_COUNTRY,
+#                 if_else(ADMIT_REGION%in%c("other states", "MA"),"US",
+#                    if_else(ADMIT_REGION=="intl","intl",ADMIT_COUNTRY))))
+              #check:%>%count(ADMIT_COUNTRY)#from 611 to 35
+              
+#use region to fill state: enrolled22fa.full%>%count(ADMIT_REGION); enrolled22fa.full%>%count(ADMIT_STATE)
+enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_STATE=
+              if_else(!is.na(ADMIT_STATE),ADMIT_STATE,
+                 if_else(ADMIT_REGION=="MA","MA",
+                      if_else(ADMIT_REGION=="other states","other states",
+                          if_else(ADMIT_REGION=="intl","intl",ADMIT_STATE)))))#check: %>%count(ADMIT_STATE)  #from 37 NA to 34
+
+#use state to fill region: enrolled22fa.full%>%count(ADMIT_REGION); enrolled22fa.full%>%count(ADMIT_STATE)
+enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_REGION=
+              if_else(!is.na(ADMIT_REGION),ADMIT_REGION,
+                 if_else(ADMIT_STATE=="MA","MA",
+                      if_else(ADMIT_STATE=="other states","other states",
+                          if_else(ADMIT_STATE=="intl","intl",ADMIT_REGION)))))
+              #check:%>%count(ADMIT_REGION)  #from 652 NA to 34
+
+#use country to fill region
+enrolled22fa.full<-enrolled22fa.full%>%mutate(ADMIT_REGION=
+              if_else(!is.na(ADMIT_REGION),ADMIT_REGION,
+                 if_else(ADMIT_COUNTRY=="intl","intl",ADMIT_REGION)))#check:%>%count(ADMIT_REGION)#no change
+
+
+#see NA: enrolled22fa.full%>%filter(is.na(ADMIT_REGION)|is.na(ADMIT_STATE))%>%select(ADMIT_STATE,ADMIT_COUNTRY,ADMIT_REGION)%>%View()#43 NA cross all admit cols
+```
+
+```{r save enrolled22fa.full}
+#save the two sheets
+#load raw
+wb<-loadWorkbook("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2022 UG Backup Data Report.xlsx")
+#add new sheet "clean" on raw
+addWorksheet(wb,"clean")
+#assign classsize as clean sheet
+writeData(wb,"clean", x = enrolled22fa.full)
+
+#add new sheet "dmt" on raw
+addWorksheet(wb,"dmt")
+#assign classsize as clean sheet
+writeData(wb,"dmt", x = dmtfa22)
+
+#check names: names(wb)
+#set order of sheets
+worksheetOrder(wb) <- c(2,1,3)
+#save all in a new file
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2022 UG Backup Data Report_cleanCDS-FandB.xlsx",overwrite = TRUE)
+```
+
+
+#CDS-B1: GD Fall Enrollment: no need to clean, load in report directly
+#CDS-B4: FinAid
+
+use retention file to easily identify 2016 cohort student (they are all non-transfer, fall enrolled, full time dgsk students in 2016); 
+do not use enroll data nor dmt data for 2016 cohort dgskFTft student:
+
+
+```{r load fin16 data}
+# finaid 2016 file contains all students enrolled in 2016 fall, and thus include all students entered in 2016 fall (2016 cohort)
+# only students who received a finaid grant/load will be included in this file
+fin16<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Fin Aid Sharing/Fall 2016 freeze file.xlsx")
+#check: 
+#check no duplication: fin16%>%count(`Student Ssn`)%>%count(n)
+```
+
+```{r select fin16_aidcols}
+##find relevant vars
+#glimpse(fin16)
+#names(fin16)#find index
+#lapply(fin16[,48:54], unique)#use index to view unique values
+##relationship between pell related grants: fin16%>%count(`Pell Award Calc`,`All Federal Grant awarded`)
+
+fin16_aidcols<-fin16%>%select(`Student Ssn`,`Pell Award Calc`,`Sub awarded`)
+
+
+##results
+#`Pell Award Calc`>0: "Recipients of a Federal Pell Grant"
+#!is.na(`Sub awarded`) & >0:  "Recipients of a Subsidized Stafford Loan"
+# `Pell Award Calc`==0, is.na(`Sub awarded`) | ==0: "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+
+fin16_aidcols<-fin16_aidcols%>%
+  mutate(pell=if_else(`Pell Award Calc`>0,"receive","not receive"),
+         stafford=if_else(is.na(`Sub awarded`),"not receive",
+                    if_else(`Sub awarded`>0,"receive","not receive")))
+#check:fin16_aidcols%>%count(stafford,`Sub awarded`)
+```
+
+
+```{r load_rentionfile}
+ret<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Data and Analyses/Retention/2022-2023/Interactive UG Retention Analysis.xlsx",sheet = "Data")
+
+#check: glimpse(retentionfile)#cohort
+```
+
+```{r identify dgskFTft students}
+cohort16<-ret%>%filter(Cohort=="2016")
+#check: cohort16%>%count(SSN)%>%count(n) #no duplication
+```
+
+```{r merge_cohort16_fin}
+cohort16_fin<-left_join(cohort16,fin16_aidcols,by=c("SSN"="Student Ssn"))
+```
+
+```{r save_cohort16_fin and cohort_16}
+wb<-createWorkbook()
+
+#add new sheet "cohort16fin" on raw
+addWorksheet(wb,"cohort16fin")
+#assign classsize as clean sheet
+writeData(wb,"cohort16fin", x = cohort16_fin)
+
+#add new sheet "cohort16fin" on raw
+addWorksheet(wb,"cohort16")
+#assign classsize as clean sheet
+writeData(wb,"cohort16", x = cohort16)
+
+#add new sheet "dmt16fa" on raw
+addWorksheet(wb,"retentionfile")
+#assign classsize as clean sheet
+writeData(wb,"retentionfile", x = ret)
+
+#add new sheet "fin16"
+addWorksheet(wb,"fin16")
+#assign classsize as clean sheet
+writeData(wb,"fin16", x = fin16)
+
+#check names: names(wb)
+#set order of sheets: worksheetOrder(wb) <- c(3,1,2)
+#save all in a new file
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2016 freeze file.cleanCDS-B4.xlsx",overwrite = TRUE)
+```
+
+
+```{r remove_enroll-load enroll16fall}
+enroll16fall<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2016 Fall/Undergrad/UGFall2016BackupData Report.xlsx",skip = 4)#%>%View()
+#one duplication: enroll16fall%>%count(`People Code Id`)%>%count(n) #due to total rows
+#duplicated NA rows: enroll16fall%>%count(`People Code Id`)%>%filter(n>1); enroll16fall%>%filter(is.na(`People Code Id`))
+#remove NA rows:
+enroll16fall<-enroll16fall%>%filter(!is.na(`People Code Id`))
+#check: enroll16fall%>%count(`People Code Id`)%>%count(n)#1788 unique rows
+
+#check: glimpse(enroll16fall)
+
+#check values for non-degsk
+#enroll16fall%>%count(Degree)#NON
+#enroll16fall%>%filter(Degree=="NON")%>%select(Curriculum)#it's NONMAT
+#enroll16fall%>%count(Curriculum)%>%View()#LASVIL
+#check for transfer: enroll16fall%>%count(`Transfer YN`)
+#Before 2019, there are no completion program
+#full time: enroll16fall%>%count(`FT/PT`)
+```
+
+```{r remove_enroll-cannot find ssn of dgskFTft students}
+#select ssn list of "first time, full time, dgsk" UG students
+dgskFTft.reg<-enroll16fall%>%filter(
+  Degree!="NON",Curriculum!="LASVIL",#dgsk (not NON in degree and not LASVIL in program)
+  `Transfer YN`=="N",#first time (N transfer & not in completion program)
+  `FT/PT`=="FT")#full time
+```
+
+```{r still-remove_dmt load dmt16fa}
+dmt16fa<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Datamart Files/Test Run of Data Mart/Fall 2016/Test Run Fall 2016 as of 9_22_2016_third_run.xlsx")
+#check: glimpse(dmt16fa)
+#no duplication: dmt16fa%>%count(PC_ID)%>%count(n)
+
+##dgsk
+#dmt16fa%>%count(DEGREE_1)#"NON"
+#dmt16fa%>%count(MATRIC_YT_YN,DEGREE_1)# has 17 0 in MATRIC_YT_YN than the 5 NON in DEGREE_1--it turns out the MATRIC_YT_YN is a better capture of non matriculated
+#dmt16fa%>%filter(MATRIC_YT_YN==0)%>%count(MATRIC_YT_YN,DEGREE_1,PROGRAM_1)# I should use MATRIC_YT_YN since it code LV (lasell village) as non-matriculated, which is more accurate (than DEGREE_1).
+#dmt16fa%>%filter(DEGREE_1=="NON")%>%select(PROGRAM_1)#it's UNDER; thus, MATRIC_YT_YN is the most accurate to capture non-matriculated to avoid forgetting excluding UNDER (in PROGRAM_1) and AA (in DEGREE_1)
+
+#dmt16fa%>%count(PROGRAM_1)%>%View()#"LV"
+#dmt16fa%>%filter(PROGRAM_1=="LV")%>%select(MAJOR_1,DEGREE_1)#Lasell Village and AA
+
+
+#check for transfer: dmt16fa%>%count(TRANSFER_YN)
+#Before 2019, there are no completion program
+#full time: dmt16fa%>%count(FTPT_TOP_LEVEL,FTPT_CODE)
+```
+
+```{r still-remove_dmt verify dgskFTft.dmt = dgskFTft.reg}
+dgskFTft.dmt<-dmt16fa%>%filter(
+  MATRIC_YT_YN!=0,#same as: DEGREE_1!="NON", PROGRAM_1!="LV",#dgsk (0 is composed of= not NON in degree + not LASVIL in program)
+  TRANSFER_YN=="N",#first time (N transfer & not in completion program)
+  FTPT_CODE=="FT")#full time
+
+#finding dgFTft students based on enrollment backup data and from dmt data are the same: identical(sort(dgskFTft.reg$`People Code Id`),sort(dgskFTft.dmt$PC_ID))#they are the same!!!
+```
+
+```{r still-remove_dmt mutate dgskFTft vars to finaid}
+#mutated vars from dmt
+dmt_dgskFTft.vars<-dmt16fa%>%select(SSN,PC_ID,TRANSFER_YN,FTPT_CODE,MATRIC_YT_YN,DEGREE_1,PROGRAM_1,MAJOR_1)
+#same format: 00 as character in dmt; missing 00 as dbl format in finaid
+dmt_dgskFTft.vars$SSN<-as.numeric(dmt_dgskFTft.vars$SSN)
+#check: glimpse(fin16$`Student Ssn`);glimpse(fin16)
+#check: glimpse(dmt_dgskFTft.vars$SSN);glimpse(dmt_dgskFTft.vars)
+
+#mutate to finaid
+fin16.merge_dgskFTft<-left_join(fin16,dmt_dgskFTft.vars,by=c(`Student Ssn`="SSN"))%>%#1842
+  mutate(dgskFTft=if_else(
+  MATRIC_YT_YN!=0 & #dgsk
+  TRANSFER_YN=="N" & #first time
+  FTPT_CODE=="FT", #full time
+  "Y","N"))#check: %>%count(dgskFTft)#1436 yes in dgskFTft
+
+#approach2: fin16%>%filter(`Student Ssn` %in% as.numeric(dgskFTft.dmt$SSN))%>%str()#1436 dgskFTft students
+```
+
+```{r still-remove_dmt save fin16.merge_dgskFTft}
+wb<-createWorkbook()
+#add new sheet "fin16"
+addWorksheet(wb,"fin16")
+#assign classsize as clean sheet
+writeData(wb,"fin16", x = fin16)
+
+#add new sheet "dmt16fa" on raw
+addWorksheet(wb,"dmt16fall")
+#assign classsize as clean sheet
+writeData(wb,"dmt16fall", x = dmt16fa)
+
+#add new sheet "merged.dgskFTft" on raw
+addWorksheet(wb,"merged.dgskFTft")
+#assign classsize as clean sheet
+writeData(wb,"merged.dgskFTft", x = fin16.merge_dgskFTft)
+
+#check names: names(wb)
+#set order of sheets: 
+worksheetOrder(wb) <- c(3,1,2)
+#save all in a new file
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2016 freeze file.cleanCDS-B4.xlsx",overwrite = TRUE)
+```
+
+#CDS-B4: 2016 cohort completion
+
+```{r explore_completion.cols}
+#relevant vars: 
+glimpse(cohort16)
+#graduated (Y/N), grad date (Y-M-D), grad year (`complete year` actually)
+#"grad year calculation: 
+#1. transfer grad date to a 'grad year' that is based on "semester": spring/summer code as the year, fall is coded as the next year 
+#e.g. 2018 spring is coded as 2018; 2018 summer is coded as 2018; 2018 fall is coded as 2019
+#then, for each cohort (fall enroll students), completion year = `grad year` - cohort year
+#e.g. 14 fall entered UG: 18spring/summer are 4th year, 18fall is 5th year (based on academic year)
+```
+
+
+
+
+
+# CDS-J and B3: Completion
+
+```{r load ipeds.complete}
+ipeds.complete<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/IPEDS/2022-2023/Fall Collection/Completions/Complete.with.Ethnicity_age.eric.editted.xlsx")
+
+#check confirm ipeds submitted the same: ipeds.complete%>%group_by(cip,Program,Degree)%>%count()#same as submitted reports
+```
+
+```{r recode degree awarded}
+#diplomas/certificates, associate, and bachelor’s degrees awarded==> no grad level
+#check: ipeds.complete%>%count(Degree)#should only include AA BA BS CER 
+
+#recode for convience: only report Certificate, Associate, Bachelor
+##all raw values of master degree: master<-grep("^M",ipeds.complete$Degree,value=TRUE)
+##unique values of master degree:
+master.tbl<-ipeds.complete%>%count(Degree)%>%filter(str_detect(Degree,"^M"))
+##recode for convience: only report Certificate, Associate, Bachelor
+ipeds.complete<-ipeds.complete%>%mutate(degree_awarded=
+          case_when(Degree=="CER"~"postbachelor certificate",
+                    Degree=="AA"~"associate degree",
+                    Degree%in%c("BA","BS")~"bachelor's degree",
+                    Degree%in%master.tbl$Degree~"master's degree"))#check:%>%count(degree_awarded,Degree)
+```
+
+
+```{r recode cip}
+#check: ipeds.complete%>%count(cip)
+#ipeds.complete%>%count( str_sub(cip,1,2))
+#only need to keep the first two digit
+ipeds.complete<-ipeds.complete%>%mutate(cip.2g=str_sub(cip,1,2))#check:%>%count(cip,cip.2g)
+```
+
+```{r save ipeds.complete}
+#save the two sheets
+#load raw
+wb<-loadWorkbook("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Complete.with.Ethnicity_age.eric.editted.xlsx")
+
+#add new sheet "clean" on raw
+addWorksheet(wb,"clean")
+#assign new ipeds.complete as clean sheet
+writeData(wb,"clean", x = ipeds.complete)
+
+#check names: names(wb)
+#set order of sheets
+worksheetOrder(wb) <- c(2,1)
+#save all in a new file
+saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Complete.with.Ethnicity_age.eric.editted_cleanCDS-J.xlsx",overwrite = TRUE)
+```
+
+
+

@@ -1,0 +1,16 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## 
+
+use 2022 fall UGbackup data in the main folder for reporting
+
+use 2022 fall GD MAIN AND I in the gd folder for reporting, because the
+census date at Lasell is at the beginning of MAIN and I (exclusing
+session II)
+
+we will use 2022 fall GDbackup data, which contains main, I, and II, for
+all other reportings

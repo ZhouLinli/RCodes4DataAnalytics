@@ -1,0 +1,264 @@
+---
+title: "FacultyTenure"
+author: "Linli Zhou"
+date: "2022-09-03"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, warning=FALSE, message=FALSE, fig.align = "center") #display code along with its results
+library(readxl)
+library(tidyverse)
+library(formattable)
+```
+
+```{r load data}
+data<-read_excel("/Users/linlizhou/Documents/LASELL/Faculty Data for Analyst Candidates.xlsx")
+```
+
+```{r}
+theme_lz <- function(){ 
+    font <- "Helvetica"   #assign font family up front
+    theme_minimal() %+replace%    #replace elements already strips axis lines, 
+    theme(
+      panel.grid.major = element_blank(),    #strip major gridlines
+      panel.grid.minor = element_blank(),    #strip minor gridlines
+      plot.title = element_text(family = font, size = 9, face = 'bold',hjust = 0.5, vjust = 2),
+      axis.title = element_text(family = font, size = 9), 
+      axis.text = element_text(family = font, size = 9), 
+      axis.text.x = element_text(family = font, size = 9, margin = margin(t=5,b=10)),
+      axis.ticks = element_blank(),          #strip axis ticks
+      axis.text.y=element_blank(),
+      legend.title = element_text(family = font, size=9),
+      legend.text = element_text(family = font, size=7),
+      legend.position="bottom",
+      legend.direction = "horizontal",
+      
+      strip.text = element_text(family = font, size = 9, margin = margin(t=5,b=10)),#move up is + 1
+      strip.background = element_blank()
+    )}
+mycolors<-c("#13294b","#5c88da","#69b3e7","#da291c","#641F45","#fcb53b","#6C6F70")#1-3blue,4-5red,6yellow,7grey
+```
+
+
+# Research questions
+
+- Who/what job titles are those tenured/non tenured 
+- Prt of each job title that tenured = tenured in job1/ all people in job1
+
+- T/NT prt (out of all T/NT total in each year) by year
+- T/NT prt (out of all T/NT total in each department) by department
+
+
+- Gender equity: female tenured/ all female vs male
+- Gender equity by department: in department 1, calcualte male-female prt gap, then rank
+
+- Racial equity: tenured in race1/ all people in race1
+- Gender equity by department: in department 1, calcualte white-black prt gap, then rank
+
+```{r clean, results='hide'}
+#remove duplicated rows
+data<-unique(data)#from 4003 to 3984 observations
+#remove duplicated ID/persons
+unique(data$ID)%>%length()#1147 unique ID
+data%>% group_by(ID) %>% summarise(cnt=n()) %>%arrange(-cnt) %>%filter(cnt>1) #815 duplicated IDs
+
+```
+
+# Yearly Tenure Status
+
+Tenured percentage has been increased since 2016 from 40% to 44% in 2021, with 2020 being the highest 45%. Non-tenured faculty percentage has been decreased from 60% to 56%, with 2020 being the lowest 55%. There are still 12% less tenured faculty than non tenured. 
+
+```{r unique TvsN across year}
+data%>%group_by(Year, `Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits=0))%>%
+  ggplot(aes(color=factor(`Tenure Status`),x=factor(Year),y=prt,group=factor(`Tenure Status`)))+geom_line()+
+  geom_text(aes(label=prt),fontface="bold")+
+  theme_lz()+
+  scale_y_continuous(breaks = seq(.4,.6,by=.05),labels = scales::percent)+
+  labs(title="Tenured Status by Year",x="Year",y="")+
+   scale_color_discrete(labels=c("Non-tenure","Tenure"),name="")+
+  theme(axis.text.y=element_blank())
+#scale_color_discrete(values = c("Non-tenure"=mycolors[4],"Tenure"=mycolors[1]),name="")
+#geom_bar(stat = "identity", position=position_dodge())
+```
+
+```{r TvsN across year, include=FALSE}
+data%>%group_by(Year, `Tenure Status`)%>%summarise(cnt=n())%>%mutate(prt=percent(cnt/sum(cnt),digits=0))%>%
+  ggplot(aes(color=factor(`Tenure Status`),x=factor(Year),y=prt,group=factor(`Tenure Status`)))+geom_line()+
+  geom_text(aes(label=prt))+
+  
+  theme_lz()+
+  scale_y_continuous(breaks = seq(.4,.6,by=.05),labels = scales::percent)+
+  labs(title="",x="Year",y="",fill="")+
+   scale_color_discrete(labels=c("Non-tenure","Tenure"),name="")
+#scale_color_discrete(values = c("Non-tenure"=mycolors[4],"Tenure"=mycolors[1]),name="")
+#geom_bar(stat = "identity", position=position_dodge())
+```
+
+# Tenure Status by Rank, Race, and Sex
+
+Assistant Professor has 64% Tenured status, 4% higher than Professor and 6% higher than Associate Professor. 
+```{r tenure by rank, fig.width=4}
+data%>% filter(Rank=="Professor"|Rank=="Assistant Professor"| Rank=="Associate Professor")%>%
+  group_by(Rank,`Tenure Status`)%>%summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits=0))%>%
+ggplot(aes(fill=factor(`Tenure Status`),x=factor(Rank),y=prt))+
+  geom_bar(stat = "identity",position = position_dodge())+
+  geom_text(aes(label=prt),position=position_dodge(.9),vjust=1.5,color="white",fontface="bold")+theme_lz()+
+  scale_fill_discrete(labels=c("Non-tenure","Tenure"),name="")+
+  labs(x="",y="",title="Tenured Status by Rank")
+```
+
+Male faculty has 8% more tenured rate than female faculty. 
+
+```{r tenure by sex, fig.width=3}
+data%>%  filter(`Legal Sex`!="Unreported") %>% group_by(`Legal Sex`,`Tenure Status`)%>% summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits=0))%>%
+ggplot(aes(fill=factor(`Tenure Status`),x=factor(`Legal Sex`),y=prt))+
+  geom_bar(stat = "identity",position = position_dodge())+
+  geom_text(aes(label=prt),position=position_dodge(.9),vjust=1.5,color="white",fontface="bold")+theme_lz()+
+  scale_fill_discrete(labels=c("Non-tenure","Tenure"),name="")+
+  labs(x="",y="",title="Tenured Status by Legal Sex")
+```
+
+Faculty from two or more races has the highest tenured rate, 50%. Hispanic and White faculty have 39% tenured rate. Asian has 38%, African American has 36%, and International has the lowest 34% tenured rate.
+
+```{r tenure by race}
+#set order
+race.order<-data%>%filter(`Race/Ethnicity`!=c ("Unreported",NA) )%>%
+  group_by(`Race/Ethnicity`,`Tenure Status`)%>%summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits=0))%>%filter(`Tenure Status`=="Tenure Line")%>%arrange(prt)%>%mutate(race.f=factor(`Race/Ethnicity`))
+
+data%>%filter(`Race/Ethnicity`!=c ("Unreported",NA) )%>%
+  group_by(`Race/Ethnicity`,`Tenure Status`)%>%summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits=0))%>%
+ggplot(aes(fill=factor(`Tenure Status`),y=factor(`Race/Ethnicity`),x=prt))+
+  geom_bar(stat = "identity",position = position_dodge())+
+  geom_text(aes(label=prt),position=position_dodge(.9),hjust=1,color="white",fontface="bold")+theme_lz()+
+  scale_fill_discrete(labels=c("Non-tenure","Tenure"),name="")+
+  labs(x="",y="",title="Tenured Status by Racial Groups")+
+  scale_y_discrete(limits=race.order$race.f)+
+  theme(axis.text.x = element_blank(),axis.text.y = element_text(size=9))
+```
+
+
+
+# Departmental Tenure Status
+
+```{r top n dep, include=FALSE}
+#Department that has top 6 number (unique ID/person) faculty
+topdep<-data%>%group_by(Department)%>%summarise(cnt=n_distinct(ID))%>%arrange(-cnt)%>%head()
+#check top department's T/NT
+data%>%filter(Department %in% topdep[[1]]) %>%
+  group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%arrange(-prt)
+```
+
+```{r dep groups, results='hide'}
+#make department count as ndep
+ndep<-data%>%group_by(Department)%>%summarise(cnt=n_distinct(ID))%>%arrange(-cnt)#
+#four groups based on department count
+ndep[ndep$cnt>30,]%>%str() #11 giant departments
+ndep[ndep$cnt%in%seq(21,30,by=1),]%>%str() #13 large departments
+ndep[ndep$cnt%in%seq(5,20,by=1),]%>%str()#14 medium departments
+ndep[ndep$cnt<5,]%>%str()#14 small departments
+
+ndep[ndep$cnt>20,]%>%str() #24 large departments
+
+ndep[ndep$cnt>30,]%>%str() #11 giant departments
+ndep[ndep$cnt%in%seq(21,30,by=1),]%>%str() #13 large departments
+ndep[ndep$cnt%in%seq(5,20,by=1),]%>%str()#14 medium departments
+ndep[ndep$cnt<5,]%>%str()#14 small departments
+
+#order based on tenure prt -- exclude those without any tenure
+dep.order.t<-data%>%group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%
+  filter(`Tenure Status`=="Tenure Line")%>%arrange(prt)%>%
+  mutate(dep.f=factor(Department))
+
+#excluded in order
+order.exclude<-data[( data$Department %in% dep.order.t$dep.f ) == FALSE,] %>%group_by(Department)%>%
+  summarise(cnt=n_distinct(ID)) %>% arrange(cnt) %>% mutate(dep.xf=factor(Department))
+
+dep.order<-c(order.exclude$dep.xf,dep.order.t$dep.f)
+```
+
+
+```{r dep n>20, fig.height=6}
+#first group n>20, 24 large departments
+data%>%filter(Department %in% ndep[ndep$cnt>20,1]$Department ) %>%
+  group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%
+  ggplot(aes(x=Department,y=prt,fill=`Tenure Status`))+geom_bar(stat = "identity")+
+  scale_x_discrete(limits = dep.order[(dep.order %in% ndep[ndep$cnt>20,1]$Department)==TRUE])+
+  theme_lz()+geom_text(aes(label=prt),position = position_stack(),hjust=1,color="white")+
+  coord_flip()+theme(axis.text.x = element_blank())+
+  theme(axis.text.y=element_text(size = 9))+
+  scale_fill_discrete(labels=c("Non-tenure","Tenure"),name="")+
+  labs(x="",y="", title="Tenure for Large Departments (>20 faculty)")
+```
+
+```{r dep n>30}
+#first group n>30, 11 giant departments
+data%>%filter(Department %in% ndep[ndep$cnt>30,1]$Department ) %>%
+  group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%
+  ggplot(aes(x=Department,y=prt,fill=`Tenure Status`))+geom_bar(stat = "identity")+
+  scale_x_discrete(limits = dep.order[(dep.order %in% ndep[ndep$cnt>30,1]$Department)==TRUE])+
+  theme_lz()+geom_text(aes(label=prt),position = position_stack(),hjust=1,color="white")+
+  coord_flip()+theme(axis.text.x = element_blank())+
+  theme(axis.text.y=element_text(size = 9))+
+  scale_fill_discrete(labels=c("Non-tenure","Tenure"),name="")+
+  labs(x="",y="", title="Tenure for Giant Departments (>30 faculty)")
+```
+
+```{r dep n21-30}
+#13 large departments
+data%>%filter(Department %in% ndep[ndep$cnt%in%seq(21,30,by=1),1]$Department ) %>%
+  group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%
+  ggplot(aes(x=Department,y=prt,fill=`Tenure Status`))+geom_bar(stat = "identity")+
+  scale_x_discrete(limits = dep.order[dep.order %in% 
+                                              ndep[ndep$cnt%in%seq(21,30,by=1),1]$Department 
+                                            ])+
+  theme_lz()+geom_text(aes(label=prt),position = position_stack(),hjust=1, color="white")+
+  coord_flip()+theme(axis.text.x = element_blank())+
+  theme(axis.text.y=element_text(size = 9))+
+  labs(x="",y="",title=str_wrap("Tenure for Large Departments (21-30 faculty)",35))
+```
+
+```{r dep n5-20}
+#22 medium departments
+data%>%filter(Department %in% ndep[ndep$cnt%in%seq(5,20,by=1),1]$Department ) %>%
+  group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%
+  ggplot(aes(x=Department,y=prt,fill=`Tenure Status`))+geom_bar(stat = "identity")+
+  scale_x_discrete(limits = dep.order[dep.order %in% 
+                                              ndep[ndep$cnt%in%seq(5,20,by=1),1]$Department 
+                                            ])+
+  theme_lz()+geom_text(aes(label=prt),position = position_stack(),hjust=1, color="white")+
+  coord_flip()+theme(axis.text.x = element_blank())+
+  theme(axis.text.y=element_text(size = 9))+
+  labs(x="",y="",title=str_wrap("Tenure for Medium-size Departments (5-20 faculty)",35))
+```
+
+
+```{r dep n<5}
+#14 medium departments
+data%>%filter(Department %in% ndep[ndep$cnt<5,1]$Department ) %>%
+  group_by(Department,`Tenure Status`)%>%
+  summarise(cnt=n_distinct(ID))%>%mutate(prt=percent(cnt/sum(cnt),digits = 0))%>%
+  ggplot(aes(x=Department,y=prt,fill=`Tenure Status`))+geom_bar(stat = "identity")+
+  scale_x_discrete(limits = dep.order[dep.order %in% 
+                                              ndep[ndep$cnt<5,1]$Department 
+                                            ])+
+  theme_lz()+geom_text(aes(label=prt),position = position_stack(),hjust=1, color="white")+
+  coord_flip()+theme(axis.text.x = element_blank())+
+  theme(axis.text.y=element_text(size = 9))+
+  labs(x="",y="",title=str_wrap("Tenure for Medium-size Departments (<5 faculty)",35))
+```
+
+
+```{r investigate}
+
+```
+
