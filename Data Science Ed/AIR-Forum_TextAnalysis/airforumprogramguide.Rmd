@@ -1,0 +1,70 @@
+
+```{r libraries}
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R")
+```
+
+```{r read_pdf}
+# function to read in PDFs and get one word per line.
+text_prepr <- function(doc, forum_year){
+  reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
+  df <- pdf_text(doc)
+  df <- data.frame(df)
+  df <- df %>%rename(text = df) %>%
+    unnest_tokens(word, text,  #
+                  token = "regex", pattern = reg) %>%
+    mutate(year = forum_year)
+  return(df)}
+```
+
+```{r fnames}
+#prep file names for systematic reading
+fnames<-list.files(path = "/Users/linlizhou/Downloads/working/air/airprogramguide", pattern="*.pdf", full.names = TRUE)
+```
+
+```{r dta}
+#read each file and bind them
+dta<-data.frame()
+for (file in fnames) {
+  year<-gsub("\\D","",file)#replace any non digit to nothing, only left is digit
+  temp <-text_prepr(file,year)#read each file
+  dta<-rbind(dta, temp)#bind one by one
+  rm(temp)}
+#dta%>%count(year)
+```
+
+```{r tbl}
+# filter for keywords and count by word and year
+tbl<-dta %>% mutate(word = tolower(word)) %>% 
+  filter(word %in% c("excel", "sas", "spss","r","python")) %>% 
+  group_by(year,word)%>%summarise(cnt=n())%>%
+  mutate(prt=cnt/sum(cnt))
+```
+
+```{r viz_stackbar}
+tbl%>%ggplot(aes(x = year, y = prt, fill=word))+
+  geom_bar(stat="identity",position = position_stack(),width=0.9)+
+  scale_fill_manual(values = c("darkgrey","lightblue","yellow","orange","lightgreen","lightgrey","#69b3e7"),guide = guide_legend(reverse = TRUE))
+```
+
+```{r viz_line}
+tbl%>%ggplot(aes(x = year, y = prt, 
+                 color = word, group = word))+
+  geom_line()+
+  scale_color_manual(values = c("black","pink","orange","yellow","darkgrey"),guide = guide_legend(reverse = TRUE))+
+  geom_point(aes(x = year, y = prt, color = word), size = 1)+
+  scale_y_continuous(breaks = seq(0, 1, by = 0.2) ,labels=scales::percent_format(accuracy = 1))+#present y axis label as percentage
+  labs(x = "AIR Forum Year", y = "Percentage of Mentions",
+      title = "Data Analysis Software Mentioned in AIR Forum Program Book (2010-2022)")+ 
+    theme_lz()+
+  theme(axis.text.x = element_text(),
+        axis.text.y = element_text(),
+        legend.margin=margin(t=0),
+        legend.title = element_blank(),
+        legend.text = element_text(size=9),
+        panel.grid.major.y = element_line())
+```
+
+```{r}
+scale_x_continuous(limits = c(2010,2022), breaks=(seq(2010,2022, 1)))+
+  geom_text_repel(aes(label=word,size=3, hjust=1,vjust=0)+
+```
