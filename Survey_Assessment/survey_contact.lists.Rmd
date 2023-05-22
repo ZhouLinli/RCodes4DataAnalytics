@@ -1,0 +1,136 @@
+---
+title: "Alchemer Survey Contact Lists"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(tidyverse)
+library(writexl)
+library(stringr)
+```
+
+# Alchemer contact list requirements:
+
+Need to be exactly "First Name", "Last Name", "Email" as col name to be able to upload on alchemer
+
+
+# Alumni surveys
+
+```{r load data}
+#the following file is sent by business office with students info who graduated in 2017 Aug, Dec, May, Dec (students graduted 5 years ago for UG/GD life after lasell survey) and 2022 Aug, Dec, May, Dec (students graduated this year for UG/GD outcome survey).
+#the info include students' current email, names, major, and contactID.
+
+#load data
+alum<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Alumni Surveys-UG.GD/2021-2022/contact list/contactlist.alumoffice - UG and Grad 2017 2022-2022-11-28-11-10-48.xlsx",skip = 11)#non-NA row starting from the 11th row (without counting the NA headers), so need to skip the first 11 rows.
+
+#remove NA cols and rows: nothing removed actually
+alum<-alum[,colSums(is.na(alum)) < nrow(alum)-1] #sum NA rows, less than nrow , allow one random value
+alum<-alum%>%janitor::remove_empty(c("rows", "cols"))%>%#rm empty/all-NA rows/cols (including header has to be NA)
+
+#check values: lapply(X= alum[c("Degree Type","Major: Area of Study Name","Class Year","Academic Status")], FUN =unique )#find NA values in several cols
+#check na rows: alum[is.na(alum$`Class Year`),]#should remove -- they are random rows
+#remove those rows with NA in multi-cols
+alum<-alum[!is.na(alum$`Class Year`),]#852 to 847 rows
+#check: lapply(X= alum[c("Degree Type","Class Year","Academic Status")], FUN =unique )
+
+#rename for convinience
+alum<-alum%>% janitor::clean_names()
+
+#remove one associate degree person
+alum<-alum%>%filter(degree_type!="Associate of Arts")#846rows
+```
+
+```{r}
+#graduate in 2017, UG
+alum%>%filter(class_year=="2017",
+              degree_type%in%c("Bachelor of Science","Bachelor of Arts"))%>%
+  select(contact_id,first_name,last_name,email)%>%
+  rename(`First Name`=first_name,`Last Name`=last_name,Email=email)%>%
+write_xlsx(path = "/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Alumni Surveys-UG.GD/2021-2022/contact list/17ug.xlsx")
+
+#graduate in 2017, GD
+alum%>%filter(class_year=="2017",
+              !degree_type%in%c("Bachelor of Science","Bachelor of Arts"))%>%
+  select(contact_id,first_name,last_name,email)%>%
+  rename(`First Name`=first_name,`Last Name`=last_name,Email=email)%>%
+write_xlsx(path = "/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Alumni Surveys-UG.GD/2021-2022/contact list/17gd.xlsx")
+
+#graduate in 2022, UG
+alum%>%filter(class_year=="2022",
+              degree_type%in%c("Bachelor of Science","Bachelor of Arts"))%>%
+  select(contact_id,first_name,last_name,email)%>%
+  rename(`First Name`=first_name,`Last Name`=last_name,Email=email)%>%
+write_xlsx(path = "/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Alumni Surveys-UG.GD/2021-2022/contact list/22ug.xlsx")
+
+#graduate in 2022, GD
+alum%>%filter(class_year=="2022",
+              !degree_type%in%c("Bachelor of Science","Bachelor of Arts"))%>%
+  select(contact_id,first_name,last_name,email)%>%
+  rename(`First Name`=first_name,`Last Name`=last_name,Email=email)%>%
+write_xlsx(path = "/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Alumni Surveys-UG.GD/2021-2022/contact list/22gd.xlsx")
+```
+
+
+# First Impression Survey: contact list for reminder
+
+Context:
+
+FIS was initially send out as a public link. The only student identifier was students' email. 
+
+For those who did not respond to FIS' public link, we are sending a "reminder", which is an individual invitation that need to have a contact list.
+
+This reminder contact list need to only include those students who did not respond to the public survey, as well as related alchemer needed info (their ppid, first, last name, email address). 
+
+To filter out students who completed the survey through public link, I used the email column to match with student backup data. Below are the codes for that: 
+
+
+```{r acm survey}
+#initial survey dataset: students who completed FIS via public link
+acm<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/archive/alchemer9.26_raw.xlsx")%>%
+  rename(email=`Please provide your Lasell email address. This information is needed for research purposes. Your personal information will be kept confidential and will not appear on any report. `)
+
+#get emails
+#must do mutate and filter separatedly from read excel to avoid confusing reading order
+acm<-acm%>%mutate(email=gsub("@lasell.edu","",acm$email),
+         email=str_to_lower(email))%>%  #119  
+            filter(!is.na(email))#116
+
+#part<-acm%>%filter(Status=="Partial")#don't worry about it
+```
+
+```{r allstu22}
+#all students who are supposed to complete First impression survey
+allstu22<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
+#select vars
+allstu22<-allstu22%>%
+  filter(`Cohort Id`=="2022")%>%#only first year students are supposed to complete first impression survey
+  select(`People Code Id`, Name,`Lasell email`)%>%#vars needed
+  rename(email=`Lasell email`)#rename for convinience
+
+#must do rename and mutate (using new name) separatedly
+allstu22<-allstu22%>%
+  #replace @lasell.edu with blank for all email
+  mutate(email=gsub("@lasell.edu","",allstu22$email),
+         email=str_to_lower(email))
+
+#get names  
+allstu22<-allstu22%>%
+ #split name before and after "," into two columns and select the first and second cols respectively      
+  mutate(`Last Name`=str_trim(str_split_fixed(allstu22$Name,",",2)[,1]),
+         `First Name`=str_trim(str_split_fixed(Name,",",2)[,2]))%>%
+  select(-Name)#remove used name var
+#check: nrow(allstu22) #have 314 students in this all 2022 students dataset (i.e. students that are supposed to answer FIS)
+```
+
+```{r match email}
+#contact list will be consisted of all allstu22 that are NOT in the acm dataset (who already answered the survey via a public link)
+contact<-allstu22[(allstu22$email%in%acm$email==FALSE),]%>%#209 students
+  rename(Email=email)#need to be exactly "Email" as col name to be able to upload on alchemer
+
+#save the contact list: 
+#write.xlsx(contact,file="/Volumes/lasellshare-1/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/ReminderContactList9.26.xlsx")
+```
+

@@ -1,0 +1,750 @@
+---
+title: "Report for Students' GPA Alignment between Canvas and Registrar in 2021-2022
+  Academic Year"
+author: "Office of Institutional Research"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document:
+    fig_width: 7
+    fig_height: 3
+always_allow_html: yes
+mainfont: Helvetica
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning=FALSE, message=FALSE, fig.align = "center") 
+knitr::opts_chunk$set(fig.pos = 'H')#hold figure position in output
+#echo=FALSE meaning code chunk won't be shown
+#include=false: not to include results from any r chunk unless specify include=true to include the output; 
+#warning=false do not include warning
+library(knitr)
+options(digits=1)
+```
+```{r setup color}
+library(ggplot2)
+
+mycolors<-c("#13294b","#5c88da","#69b3e7","#fcb53b","#6C6F70","#641F45")
+scale_color_manual(values=mycolors)
+
+theme_lz <- function(){ 
+    font <- "Helvetica"   #assign font family up front
+    theme_minimal() %+replace%    #replace elements already strips axis lines, 
+    theme(
+      panel.grid.major = element_blank(),    #strip major gridlines
+      panel.grid.minor = element_blank(),    #strip minor gridlines
+      plot.title = element_text(family = font, size = 9, face = 'bold',hjust = 0.5, vjust = 2),
+      axis.title = element_text(family = font, size = 9), 
+      axis.text = element_text(family = font, size = 9), 
+      axis.text.x = element_text(family = font, size = 9, margin = margin(t=5,b=10)),
+      axis.ticks = element_blank(),          #strip axis ticks
+      
+      legend.title = element_blank(),
+      legend.text = element_text(family = font, size=7),
+      legend.position="right",
+      
+      strip.text = element_text(family = font, size = 9, margin = margin(t=5,b=10)),#move up is + 1
+      strip.background = element_blank()
+    )}
+```
+
+```{r load dataset} 
+#include=FALSE meaning output won't be shown
+library(readxl)
+#for windows
+#canvrp<-read_excel("S:/IR/Data and Analyses/Ad Hoc Projects/2021-2022/Canvas Grades_2022/gradalign_working.xlsx")
+#for mac
+#canvrp<-read_excel("/Volumes/Faculty_Staff_Shares$/IR/Data and Analyses/Ad Hoc Projects/2021-2022/Canvas Grades_2022/gradalign_working.xlsx")
+canvrp<-read_excel("/Users/linlizhou/Documents/LASELL/data/progameval/gradalign_working.xlsx")
+```
+
+```{r dataset prep - poppulation&semester}
+#We focus on undergraduate and graduate student in fall, spring, and summer semesters. We thus filtered out students in other level of study (professional, certificate, or non-matriculated students) and in students in winter semesters (which may be input error).
+library(dplyr)
+#check program names
+canvrp%>%group_by(Program)%>%summarise(n())
+#instead of mutate a new Program variable using case when undergrad/grad (other Program will be NAs), we want to avoid NAs then we used filter function
+canvrp_ugg<-canvrp%>% filter(Program == "GRAD" | Program == "UNDER" )
+#check Program names
+canvrp_ugg%>%group_by(Program)%>%summarise(n())
+#looks right, only have undergrad and grad now; saved as canvrp_ugg
+#recode Program names
+#canvrp_ugg$Program<-recode(canvrp_ugg$Program,"UNDER"="Undergraduate Courses","GRAD"="Graduate Courses")
+#check
+canvrp_ugg%>%group_by(Program)%>%summarise(n())
+#factor level to make the correct order
+canvrp_ugg$Program=factor(canvrp_ugg$Program, levels=c("UNDER","GRAD"),labels = c("Undergraduate Course","Graduate Course"))
+
+#check
+canvrp_ugg%>%group_by(Program)%>%summarise(n())
+#check semester
+canvrp_ugg%>%group_by(`Academic Term`)%>%count()
+#filter out winter semester
+canvrp_ugg <-canvrp_ugg %>% filter(`Academic Term`!="WINTER")
+#check 
+canvrp_ugg%>%group_by(`Academic Term`)%>%count()
+#looks rights, only have fall, spring, summer data now; saved as canvrp_ugg
+
+#reorder term using factor()
+canvrp_ugg$`Academic Term`=factor(canvrp_ugg$`Academic Term`,levels=c("SUMMER","FALL","SPRING"),labels = c("2021 Summer","2021 Fall","2022 Spring"))
+
+#session
+canvrp_ugg%>%group_by(`Academic Session`)%>%count()
+canvrp_ugg$`Academic Session`=factor(canvrp_ugg$`Academic Session`,levels=c("MAIN","SES1","SES2"),labels = c("Main","Session 1","Session 2"))
+canvrp_ugg%>%group_by(`Academic Session`)%>%count()
+```
+
+```{r dataset prep - remove unmatched}
+#To have valid data points, we removed those Canvas GPA that does not have a match at Registrar GPA or the other way around. 
+
+# for existing gpa in both system, duplicate canvas gpa
+# all the disqualified grades (only exist in one system, but NA in the other system) will be NAs in gpa_match column
+canvrp_ugg <-canvrp_ugg %>% mutate(canvasgpa_match=case_when(
+  canvasgpa!="NA" & registrargpa!="NA" ~ canvasgpa
+))
+# for existing gpa in both system, duplicate registrar gpa
+canvrp_ugg <-canvrp_ugg %>% mutate(registrargpa_match=case_when(
+  canvasgpa!="NA" & registrargpa!="NA" ~ registrargpa
+))
+#check
+canvrp_ugg%>% group_by(canvasgpa_match)%>%count()
+canvrp_ugg%>% group_by(registrargpa_match)%>%count()
+#filter out unmatched (NA) values
+canvrp_ugg_match<-canvrp_ugg%>%filter(canvrp_ugg$canvasgpa_match != "NA") 
+#check
+canvrp_ugg_match%>% group_by(canvasgpa_match)%>%count()
+canvrp_ugg_match%>% group_by(registrargpa_match)%>%count()
+#looks right, all unmatch grades are removed; the filtered dataset is saved as canvrp_ugg_match dataset
+```
+
+
+
+```{r dataset prep - create difference var}
+#create the difference variable (reg-canvas)
+canvrp_ugg_match<-canvrp_ugg_match%>% mutate(difference=registrargpa_match-canvasgpa_match)
+#check
+t<-canvrp_ugg_match%>%group_by(difference)%>%count()%>%arrange(order(abs(difference)))
+#looks right, difference are distributed either 0, within .3-.7, or above 1
+
+#grouping the difference variable
+canvrp_ugg_match<- canvrp_ugg_match %>% mutate( 
+  diff_cat = case_when(
+  abs(canvrp_ugg_match$difference) > 1 ~ "Significant difference",
+  abs(canvrp_ugg_match$difference) > 0 & abs(canvrp_ugg_match$difference) <= 1 ~ "Slight difference",
+ abs(canvrp_ugg_match$difference) == 0 ~ "Exact match"))
+#  abs(canvrp_ugg_match$difference) >= 0.3 & abs(canvrp_ugg_match$difference) <= 0.7 ~ "Slight Difference" does not work has NAs
+#check
+canvrp_ugg_match%>%group_by(diff_cat)%>%count() #looks right now with three categories of differences
+
+#  reorder by factor()
+canvrp_ugg_match$diff_cat=factor( canvrp_ugg_match$diff_cat, levels = c("Exact match","Slight difference","Significant difference"))
+#check
+canvrp_ugg_match%>%group_by(diff_cat)%>%count() #looks right now with three categories of differences with the right order
+```
+```{r department-school var}
+canvrp_ugg_match<-canvrp_ugg_match%>% mutate(school = case_when(
+  `Course Department`=="ACC"~"No School",
+`Course Department`=="ARTH"~"School of Communication & the Arts",
+`Course Department`=="ARTS"~"School of Communication & the Arts",
+`Course Department`=="ASL"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="AT"~"School of Health Sciences",
+`Course Department`=="BA"~"School of Business",
+`Course Department`=="BIO"~"School of Health Sciences",
+`Course Department`=="BUSS"~"School of Business",
+`Course Department`=="CHEM"~"School of Health Sciences",
+`Course Department`=="CJ"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="COMM"~"School of Communication & the Arts",
+`Course Department`=="DSCI"~"School of Health Sciences",
+`Course Department`=="ECON"~"School of Business",
+`Course Department`=="ED"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="ELSP"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="ENG"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="EXSC"~"School of Health Sciences",
+`Course Department`=="FASD"~"School of Fashion",
+`Course Department`=="FASH"~"School of Fashion",
+`Course Department`=="FASM"~"School of Fashion",
+`Course Department`=="FSCI"~"School of Health Sciences",
+`Course Department`=="FYS"~"No School",
+`Course Department`=="GRAP"~"School of Communication & the Arts",
+`Course Department`=="HEM"~"School of Business",
+`Course Department`=="HIST"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="HON"~"No School",
+`Course Department`=="HS"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="HUM"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="IDS"~"No School",
+`Course Department`=="LS"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="LWS"~"No School",
+`Course Department`=="MATH"~"School of Health Sciences",
+`Course Department`=="MDSC"~"No School",
+`Course Department`=="MGMT"~"School of Business",
+`Course Department`=="MSAT"~"School of Health Sciences",
+`Course Department`=="MUS"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="NHP"~"School of Health Sciences",
+`Course Department`=="PERF"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="PHIL"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="PHLT"~"School of Health Sciences",
+`Course Department`=="PHYS"~"School of Health Sciences",
+`Course Department`=="POLS"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="PSYC"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="RSCI"~"School of Health Sciences",
+`Course Department`=="SCI"~"School of Health Sciences",
+`Course Department`=="SMGT"~"School of Business",
+`Course Department`=="SMGTGR"~"School of Business",
+`Course Department`=="SOC"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="SPAN"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="SPED"~"School of Humanities, Education, Justice & Social Sciences",
+`Course Department`=="SVL"~"No School",
+`Course Department`=="WRT"~"Writing Program"
+))
+#Check
+canvrp_ugg_match%>%group_by(school)%>%count()
+
+#department full name
+canvrp_ugg_match<-canvrp_ugg_match%>%mutate(department=case_when(
+  `Course Department`=="ACC"~"Academic Achievement Center",
+`Course Department`=="ARTH"~"Art History",
+`Course Department`=="ARTS"~"Art Studio",
+`Course Department`=="ASL"~"American Sign Language",
+`Course Department`=="AT"~"Athletic Training",
+`Course Department`=="BA"~"Business Administration",
+`Course Department`=="BIO"~"Biology",
+`Course Department`=="BUSS"~"School of Business",
+`Course Department`=="CHEM"~"Chemistry",
+`Course Department`=="CJ"~"Crinimal Justice",
+`Course Department`=="COMM"~"Communications",
+`Course Department`=="DSCI"~"Data Science",
+`Course Department`=="ECON"~"Economics",
+`Course Department`=="ED"~"Education",
+`Course Department`=="ELSP"~"English Language for SPED",
+`Course Department`=="ENG"~"English",
+`Course Department`=="EXSC"~"Exercise Science",
+`Course Department`=="FASD"~"Fashion Design",
+`Course Department`=="FASH"~"Fashion Merchandising & Management",
+`Course Department`=="FASM"~"Fashion Media & Marketing",
+`Course Department`=="FSCI"~"Forensic Science",
+`Course Department`=="FYS"~"First Year Seminar",
+`Course Department`=="GRAP"~"Graphic Design",
+`Course Department`=="HEM"~"Hospitality Management",
+`Course Department`=="HIST"~"History",
+`Course Department`=="HON"~"Honors",
+`Course Department`=="HS"~"Human Services",
+`Course Department`=="HUM"~"Humanities",
+`Course Department`=="IDS"~"Individualized Studies",
+`Course Department`=="LS"~"Legal Studies",
+`Course Department`=="LWS"~"Lasell Works",
+`Course Department`=="MATH"~"Mathematics",
+`Course Department`=="MDSC"~"Multidisciplinary Studies",
+`Course Department`=="MGMT"~"Management",
+`Course Department`=="MSAT"~"Masters in Athletic Training",
+`Course Department`=="MUS"~"Music",
+`Course Department`=="NHP"~"Nutrition & Health Practices",
+`Course Department`=="PERF"~"Performance",
+`Course Department`=="PHIL"~"Philosophy",
+`Course Department`=="PHLT"~"Public & Community Health",
+`Course Department`=="PHYS"~"Physics",
+`Course Department`=="POLS"~"Political Science",
+`Course Department`=="PSYC"~"Psychology",
+`Course Department`=="RSCI"~"Rehabilitation Science",
+`Course Department`=="SCI"~"Science",
+`Course Department`=="SMGT"~"Sport Management",
+`Course Department`=="SMGTGR"~"Sport Management Graduate",
+`Course Department`=="SOC"~"Sociology",
+`Course Department`=="SPAN"~"Spanish",
+`Course Department`=="SPED"~"Special Education",
+`Course Department`=="SVL"~"Service Learning",
+`Course Department`=="WRT"~"Writing"
+))
+#check
+canvrp_ugg_match%>%group_by(department)%>%count()
+```
+
+
+
+
+
+
+
+
+
+# Executive Summary
+
+In Summer 2022, the Institutional Research (IR) Office collaborated with the Teaching and Learning Center (TLC) to compare grade consistency between two systems -- Canvas ^[Canvas is a learning management system used for instruction and advising.] and the Registrar's Office ^[Registrar's Office is a data management system used by the Registrar office for generating student transcripts and administrative reports.]. Comparing students' grades in Canvas with Registrar is important for providing accurate advising and intervention for students. 
+
+We examined `r nrow(canvrp_ugg_match)` grades which has valid scores range from 0-110 in Canvas and has a match in Registrar's GPA systems. ^[Appendix details the process of converting grades from the two systems to comparable scales.] We explored the following research questions: 1) How consistent are grades between Canvas and Registrar's Office for undergraduate and graduate courses? 2) How grade consistency in undergraduate and graduate courses vary by school, semester and session, and year? The main findings are:
+
+* Many courses’ grades (GPA) are 3.7 and 4.0 in both Registrar and Canvas for undergraduate and graduate courses. However, graduate courses have 20% more 4.0 GPA than undergraduate courses.
+
+* 85% of graduate and 71% of undergraduate courses grades matched exactly. Only 4% of graduate and 2% of undergraduate courses’ grades have a significant difference (more than 1.0 GPA difference) between Registrar and Canvas.
+
+* Courses in  Lasell Works and the Honors Program had over 90% grade consistency. Courses in multidisciplinary studies have the lowest percentage (55%) exact match. 
+
+* In 2021 Summer, session 2 perform the worst (64% for undergraduate courses and 79% for undergraduate courses). However, in 2021 Fall and 2022 Spring, session 2 perform the best (above 90% for both undergraduate and graduate courses). Undergraduate courses have the least grade consistency (around 70%) in main sessions in 2021 Fall and 2022 Spring. 
+
+* Graduate courses' grade consistency in 2021 Fall and 2022 Spring is above 80%, which is almost 10% higher than previous years (data date back to 2018 Spring).
+
+
+# Patterns of grades distribution
+
+
+```{r GPA distribution across population}
+#prep long data for plotting bar graph
+library(tidyr)
+canvrp_ugg_long<-canvrp_ugg_match%>%pivot_longer(cols=c(registrargpa_match,canvasgpa_match),names_to = "WhichSystem",values_to = "Grade2System")
+#check
+canvrp_ugg_long%>%group_by(WhichSystem,Grade2System)%>%count()
+#looks right
+
+#check the order, looks right
+canvrp_ugg_long%>%group_by(WhichSystem)%>%count()
+
+#plot bar graph with different groups side by side
+library(ggrepel)#for using geom_text_repel for automatically non-overlapping data labels
+library(formattable)#for percent function
+plot_stuprt<-
+  canvrp_ugg_long%>%group_by(Program, WhichSystem,Grade2System)%>%summarise(cnt=n())%>%mutate(prt=cnt/sum(cnt))%>% #create a pivot table including all variables that will be used in plot
+  
+  ggplot(aes(x=factor(Grade2System), y=percent(prt,digit=0), fill=WhichSystem))+ 
+  geom_bar(stat="identity",position=position_dodge(),width = 0.8)+
+  facet_grid(~Program)+
+  
+  scale_fill_manual(values = c(mycolors[2],mycolors[3]), labels=c("Canvas","Registrar"), name="")+#change legend color, lable, and title
+  scale_y_continuous(breaks = seq(0, 0.7, by = 0.2) ,labels = scales::percent)+#present y axis label as percentage
+  geom_text_repel(aes(label= ifelse(Grade2System==4,paste(round(100*prt, 0), "%", sep=""),"")),size=3)+
+  labs(x = "GPA", y = "Distribution")+
+  theme_lz()+theme(panel.grid.major.y = element_line(colour = "grey95"))
+```
+```{r plot_stuprt, fig.cap=paste("Similar Patterns of Canvas and Registrar Course GPA \\label{fig:stuprt}"), include=TRUE}
+plot_stuprt
+```
+
+As shown in Figure \ref{fig:stuprt}, the Registrar and Canvas systems have similar patterns of GPA distribution. In both systems, grades are concentrated towards the higher GPA (i.e., 3.7 and 4.0) and the number of grades decrease towards lower GPA. However, for 4.0 GPA, there are 20% less undergraduate course grades (n=`r sum(canvrp_ugg_match$Program=="Undergraduate Course")`) than graduate course grades(n=`r sum(canvrp_ugg_match$Program=="Graduate Course")`). ^[40% undergraduate course grades have 4.0 GPA. 60% graduate course grades have 4.0 GPA.]
+
+
+# Overall grade consistency
+  
+```{r GPA mapping plot}
+library(tidyr)
+library(ggnewscale)#for 2 scale_corlor_manual which is for 2 legend both based colors
+plot_GPAmap<-canvrp_ugg_match %>% ggplot(aes(x=factor(canvasgpa_match),y=factor(registrargpa_match), color=diff_cat)) +
+  geom_point(position = "jitter") +
+  geom_smooth(aes(group=1, color="Trend"), size=0.5)+ #add a trend line; cannot do factor(x or y); aes(group=diff_cat) will produce a trend line for each group
+  facet_wrap(~Program)+
+   scale_color_manual (values = c(
+     "Exact match"=mycolors[1],"Slight difference"=mycolors[3],"Significant difference"=mycolors[6],"Trend"="red" #only add one value in scale_corlor_manual for lines then facet them, not need to add two values which will produe not two trend line not two same lines for faceted graph
+                                 ), 
+                      name = 'Difference between systems')+
+  
+    new_scale_color() +#for second scale_corlor_manual that are needed to display legend on this abline
+  geom_abline(aes(color="Exact match line",slope = 1, intercept = 0))+ #add an abline
+  scale_color_manual(name='firstline', values="yellow")+
+  
+ 
+  labs(x="Canvas GPA",y="Registrar GPA")+
+  theme_lz()
+  
+  
+# scatter canvas on registrar jittering with smooth line
+#library(tidyr)
+#library(ggnewscale)#for 2 scale_corlor_manual which is for 2 legend both based colors
+#plot_GPAmap<-canvrp_ugg_match %>%
+  
+#  ggplot(aes(x=factor(canvasgpa_match),y=factor(registrargpa_match), color=diff_cat)) +
+#  geom_point(position = "jitter") + #points
+#        geom_smooth(aes(group=1), color="red",size=0.5, method="lm", se=FALSE)+ #add a trend line; cannot do factor(x or y); aes(group=diff_cat) will produce a trend line for each group
+#  facet_wrap(~Program)+
+#  scale_color_manual (values = c("Exact match"=mycolors[1],
+                              #   "Slight difference"=mycolors[3],
+                               #  "Significant difference"=mycolors[6]), #adding geom_smooth into the legend together with points groups' legend
+             #         name = 'Difference between systems')+
+
+
+  
+  
+ # new_scale_color() +#for second scale_corlor_manual that are needed to display legend on this abline
+#  geom_abline(aes(color="abline",slope = 1, intercept = 0))+ #add an abline
+#  scale_color_manual(name='firstline', values="yellow")+
+  
+ 
+#  labs(x="Canvas GPA",y="Registrar GPA")+
+#  theme_lz()
+  
+```
+```{r mapping GPA,fig.height=3.5, fig.cap=paste("Difference between Canvas and Registrar Course GPA \\label{fig:gpamap}"), include=TRUE}
+plot_GPAmap #display 
+```
+
+As shown in Figure \ref{fig:gpamap}, more courses have higher grades in Registrar than in Canvas (we have more red dots above the yellow line than below the line). For undergraduate courses (n=`r sum(canvrp_ugg_match$Program=="Undergraduate Course")`), grades spread across different GPAs. For graduate course (n=`r sum(canvrp_ugg_match$Program=="Graduate Course")`), grades concentrated on 2.7 or higher. The trend line (red line) of undergraduate course grade has is closer to the exact match lines (yellow line) towards the 3.7 GPA. The trend line (red line) of graduate course grade almost overlaps with the exact match trend line (yellow line) since 2.7 GPA and higher GPAs.
+
+
+```{r GPA difference plot}
+# diff_cat variables bar graph
+plot_GPAdiff<-
+  canvrp_ugg_match%>%group_by(Program,diff_cat)%>%#have to put program before diff_cat to make program add to 100%. In other words, Program is treated as the larger group. Diff_cat is treated within the different program group.
+  summarise(cnt=n())%>%mutate(prt=cnt/sum(cnt))%>%
+  
+  ggplot(aes(x=prt,y=Program,fill=diff_cat)) +
+  geom_bar(stat="identity", width=0.8)+
+ 
+  
+  geom_text(aes(label=percent(prt,digits=0)),color="white",size=3, hjust=0.1,vjust=0.3)+#v=0 is the middle of horizontal bar; h=0 is the top of the horizontal bar; increase to move left and down
+  scale_x_continuous(labels = scales::percent)+
+  scale_fill_manual(values = c(mycolors[1],mycolors[3],mycolors[6]))+
+  labs(x="Difference Categories", y="")+
+  theme_lz() +
+  theme(axis.text.x=element_blank(),axis.title = element_blank())
+```
+```{r plot GPA difference, fig.height=1, fig.cap=paste("Percentage of Grade Consistency \\label{fig:gpadiff}"), include=TRUE}
+plot_GPAdiff #display 
+```
+
+As shown in Figure \ref{fig:gpadiff}, 85% graduate courses and 71% undergraduate courses have exact match of grades between Registrar's Office and Canvas. Only 4% of undergraduate courses and 2% of graduate courses have significant differences (grade difference between the two systems are above 1.0). Graduate course grades has 14% more exact match than undergraduate course grades. 
+
+
+
+
+
+
+
+
+# Grade consistency by School
+
+
+```{r school_scatter}
+#compare x vs y by level of study in different faceted semester/session
+canvrp_ugg_match %>% filter(school!="No School")%>%
+  ggplot(aes(x=registrargpa_match,y=canvasgpa_match, color=diff_cat)) + 
+  geom_point(position = "jitter") + #must have jitter to show density
+  scale_color_manual(values = c(mycolors[1],mycolors[3],mycolors[6]))+
+  labs(x='Registrar GPA',y='Canvas GPA')+theme_minimal()+facet_wrap(~school,ncol = 2)
+```
+
+```{r make school_bar}
+school_pvttbl<-canvrp_ugg_match%>%filter(school!="No School")%>%filter(school!="Writing Program")%>%
+  group_by(school,diff_cat)%>%summarise(cnt=n())%>%mutate(prt=(cnt/sum(cnt)))
+
+#define school levels in factor() using the order that displayed/sorted based on exact match prt
+set_order_school<-school_pvttbl%>%filter(diff_cat=="Exact match")%>%arrange(prt)%>%
+  mutate(school_reorder=factor(school))
+
+school_bar<-school_pvttbl%>%
+  ggplot(aes(y=school,x=prt,fill=diff_cat))+
+           geom_bar(stat="identity", width=0.8)+
+  labs(x="",y="")+
+  scale_fill_manual(values=c(mycolors[1],mycolors[3],mycolors[6]))+scale_x_continuous(labels = scales::percent)+
+  #reorder y lables based on pre-defined levels 
+  scale_y_discrete(limit=set_order_school$school_reorder)+
+  geom_text(aes(label=paste(round(prt*100,0),"%",sep="")),color="white",size=3,hjust=0.2,vjust=0.3)+
+  theme_lz()+theme(legend.title = element_blank(),axis.text.x = element_blank())
+```
+```{r present school_bar, fig.cap=paste("Grade Consistency for Each School \\label{fig.schoolbar}"), fig.height=2.5,include=TRUE}
+school_bar
+```
+
+```{r nschool prep}
+canvrp_ugg_match%>%group_by(school)%>%count()
+nsof<-sum(canvrp_ugg_match$school=="School of Fashion")
+nsob<-sum(canvrp_ugg_match$school=="School of Business")
+nsoc<-sum(canvrp_ugg_match$school=="School of Communication & the Arts")
+nhs<-sum(canvrp_ugg_match$school=="School of Health Sciences")
+nhejss<-sum(canvrp_ugg_match$school=="School of Humanities, Education, Justice & Social Sciences")
+```
+
+As shown in Figure \ref{fig.schoolbar}, School of Fashion (n=`r nsof`) has the highest grade consistency (i.e., 83% exact match). School of Business (n=`r nsob`), School of Health Sciences (n=`r nhs`), School of Humanities, Education, Justice and Social Sciences (n=`r nhejss`), and School of Communication and the Arts (n=`r nsoc`) are between 72%-76%. 
+
+
+```{r show no-school affiliated department/programs}
+canvrp_ugg_match%>% filter(school=="No School")%>%group_by(department)%>%summarise(cnt=n())%>%arrange(desc(cnt))
+```
+
+```{r prep no school department bar -ordered}
+dpt_pvttbl<-canvrp_ugg_match%>%filter(school=="No School" |school== "Writing Program")%>% filter(department != "Service Learning") %>% filter( department != "Individualized Studies") %>% filter( department != "Academic Achievement Center")%>%
+  group_by(department,diff_cat)%>%summarise(cnt=n())%>%mutate(prt=(cnt/sum(cnt)))
+
+#use value "exact match" within variable "diff_cat" to be the rule for reordering/ factoring another variable "department" that will later become the y axis labels
+set_order <- dpt_pvttbl%>%
+  filter(diff_cat == "Exact match") %>% 
+  arrange(prt) %>% 
+  mutate(department_reorder = factor(department))
+
+
+no_school_department_bar<-dpt_pvttbl%>%
+  ggplot(aes(y=department,x=prt,fill=diff_cat))+
+           geom_bar(stat="identity", width=0.8)+
+  labs(x="",y="")+
+  #reorder y axis labels using pre-defined factor levels using the set_order object (created from order of the "exact match" values within the diff_cat variable)
+  scale_y_discrete(limits = set_order$department_reorder)+
+  scale_fill_manual(values=c(mycolors[1],mycolors[3],mycolors[6]))+scale_x_continuous(labels = scales::percent)+
+  geom_text(aes(label=paste(round(prt*100,0),"%",sep="")),color="white",size=3,hjust=0.2,vjust=0.3)+
+  theme_lz()+theme(legend.title = element_blank(),axis.text.x = element_blank())
+```
+
+```{r show department bar, fig.cap="Grade Consistency in Non-School-Affiliated Programs \\label{fig.noschool}",fig.height=2.5,include=TRUE}
+no_school_department_bar
+```
+
+```{r noschool description prep n}
+canvrp_ugg_match%>%filter(school=="No School"|school=="Writing Program")%>%
+  group_by(department)%>%dplyr::count()
+nhonors<-sum(canvrp_ugg_match$department=="Honors")
+nwriting<-sum(canvrp_ugg_match$department=="Writing")
+nfys<-sum(canvrp_ugg_match$department=="First Year Seminar")
+nmulti<-sum(canvrp_ugg_match$department=="Multidisciplinary Studies")
+nlw<-sum(canvrp_ugg_match$department=="Lasell Works")
+```
+
+```{r investigate MDSC/Multidisciplineary Studies}
+canvrp_ugg_match %>% filter(department=="Multidisciplinary Studies")%>%group_by(`Course Name`)%>%count()
+canvrp_ugg_match %>% filter(department=="Multidisciplinary Studies")%>%group_by(`Course ID`)%>%count()
+```
+
+
+
+
+As shown in Figure \ref{fig.noschool}, Lasell Works (n=`r nlw`) has the highest grade consistency (i.e., 90%), followed by the Honors Program (n=`r nhonors`), which is 85%. The Writing Program (n=`r nwriting`) and First Year Seminar (n=`r nfys`) has 75% grades match between the Registrar and Canvas systems. Multidiscplineary Studies (n=`r nmulti`) has the lowest grade consistency, which is 55%. 
+
+
+
+# Grade consistency by writing program
+```{r consistency by specific writing program}
+writing_pvttbl<-canvrp_ugg_match %>% filter(school=="Writing Program")%>%filter(`Course ID`!="WRT190D") %>%#have one obervation for WRT190D
+group_by(`Course ID`,diff_cat)%>%summarise(cnt=n())%>%mutate(prt=cnt/sum(cnt))
+
+#define school levels in factor() using the order that displayed/sorted based on exact match prt
+set_order_writing<-writing_pvttbl%>%filter(diff_cat=="Exact match")%>%arrange(prt)%>%
+  mutate(writing_reorder=factor(`Course ID`))
+
+writing_bar<-writing_pvttbl%>%
+  ggplot(aes(y=`Course ID`,x=prt,fill=diff_cat))+
+           geom_bar(stat="identity", width=0.8)+
+  labs(x="",y="")+
+  scale_fill_manual(values=c(mycolors[1],mycolors[3],mycolors[6]))+scale_x_continuous(labels = scales::percent)+
+  #reorder y lables based on pre-defined levels 
+  scale_y_discrete(limit=set_order_writing$writing_reorder)+
+  geom_text(aes(label=paste(round(prt*100,0),"%",sep="")),color="white",size=3,hjust=0.2,vjust=0.3)+
+  theme_lz()+theme(legend.title = element_blank(),axis.text.x = element_blank())
+```
+
+```{r FIX writing course prep n}
+canvrp_ugg_match%>%filter(school=="Writing Program")%>%
+  group_by(department)%>%count()
+nwrt101<-sum(canvrp_ugg_match$`Course ID`=="WRT101")
+nwrt102<-sum(canvrp_ugg_match$`Course ID`=="WRT102")
+```
+
+```{r show writing bar, fig.cap="Grade Consistency in Writing Programs \\label{fig.writing}",fig.height=1,include=TRUE}
+writing_bar
+```
+As shown in Figure \ref{fig.writing}, Writing 101 (n=342) and 102 (n=334) has similar exact match, but Writing 101 has 8% significant difference than Writing 102 which is 4%. 
+
+
+
+# Grade consistency by semester and sessions in 2021-2022
+
+```{r 21-22term}
+plot_term<-canvrp_ugg_match%>%group_by(Program,`Academic Term`,diff_cat)%>%summarise(cnt=n())%>%mutate(prt=cnt/sum(cnt))%>%
+  ggplot(aes(y=`Academic Term`,x=percent(prt,digit=0),fill=diff_cat))+
+  geom_bar(stat="identity",width=.8)+
+  facet_grid(~Program)+
+  scale_x_continuous(labels = scales::percent)+
+  scale_y_discrete(limits=rev)+
+  scale_fill_manual(values = c(mycolors[1],mycolors[3],mycolors[6]))+
+  labs(x="",y="")+
+  geom_text(aes(label=percent(prt,digits=0)),color="white",size=3,hjust=0.2,vjust=0.3)+
+  theme_lz()+theme(axis.text.x = element_blank())
+```
+```{r diff_cat by term, fig.height=1.5,fig.cap=paste("Grade Consistency in Different Terms \\label{fig:term}"), include=TRUE}
+plot_term
+```
+
+As shown in Figure \ref{fig:term}, exact match between Canvas and Registrar are between 71%- 87% across different terms (spring, fall, summer) in academic year 2021-2022. There are less than 4% significant difference between Canvas and Registrar grades for both undergraduate and graduate courses. However, the exact match of graduate course grades are more than 10% higher than undergraduate courses. In spring, graduate course have 18% more exact-matched grades than undergraduate courses. 
+
+
+```{r embedded inline code prep}
+s21m<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Main")
+s21.1<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Summer"&canvrp_ugg_match$`Academic Session`=="Session 1")
+s21.2<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Summer"&canvrp_ugg_match$`Academic Session`=="Session 2")
+
+f21m<-sum( canvrp_ugg_match$Program=="Undergraduate Course" & canvrp_ugg_match$`Academic Term`=="2021 Fall" & canvrp_ugg_match$`Academic Session`=="Main")
+f21.1<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Fall"&canvrp_ugg_match$`Academic Session`=="Session 1")
+f21.2<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Fall"&canvrp_ugg_match$`Academic Session`=="Session 2")
+
+s22m<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Main")
+s22.1<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Session 1")
+s22.2<-sum(canvrp_ugg_match$Program=="Undergraduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Session 2")
+```
+
+```{r grad embedded inline code prep}
+gs21m<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Main")
+gs21.1<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Summer"&canvrp_ugg_match$`Academic Session`=="Session 1")
+gs21.2<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Summer"&canvrp_ugg_match$`Academic Session`=="Session 2")
+
+gf21m<-sum( canvrp_ugg_match$Program=="Graduate Course" & canvrp_ugg_match$`Academic Term`=="2021 Fall" & canvrp_ugg_match$`Academic Session`=="Main")
+gf21.1<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Fall"&canvrp_ugg_match$`Academic Session`=="Session 1")
+gf21.2<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2021 Fall"&canvrp_ugg_match$`Academic Session`=="Session 2")
+
+gs22m<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Main")
+gs22.1<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Session 1")
+gs22.2<-sum(canvrp_ugg_match$Program=="Graduate Course"&canvrp_ugg_match$`Academic Term`=="2022 Spring"&canvrp_ugg_match$`Academic Session`=="Session 2")
+```
+
+```{r 21-22session consistent format}
+plot_session_frmt<-canvrp_ugg_match%>%
+  group_by(Program, `Academic Term`,`Academic Session`,diff_cat)%>%summarise(cnt=n())%>%mutate(prt=cnt/sum(cnt))%>%
+  
+  ggplot(aes(x=percent(prt,digit=0),y=`Academic Session`,fill=diff_cat))+
+  geom_bar(stat="identity",width=.8)+
+  facet_grid(`Academic Term`~Program)+
+  scale_x_continuous(labels = scales::percent)+
+  scale_y_discrete(limits=rev)+
+  scale_fill_manual(values = c(mycolors[1],mycolors[3],mycolors[6]))+
+  labs(x="",y="")+
+  geom_text(aes(label=ifelse(diff_cat=="Exact match",paste(round(prt*100,0),"%",sep=""),"")),color="white",size=3,hjust=0.8,vjust=0.3)+
+  theme_lz()+theme(axis.text.x = element_blank())
+```
+
+```{r 21-22session}
+plot_session<-canvrp_ugg_match%>%
+  group_by(Program, `Academic Term`,`Academic Session`,diff_cat)%>%summarise(cnt=n())%>%mutate(prt=cnt/sum(cnt))%>%
+  
+  ggplot(aes(x=percent(prt,digit=0),y=`Academic Session`,fill=diff_cat))+
+  geom_bar(stat="identity",width=.8)+
+  facet_grid(Program~`Academic Term`)+
+  scale_x_continuous(labels = scales::percent)+
+  scale_fill_manual(values = c(mycolors[1],mycolors[3],mycolors[6]))+
+  labs(title="Registrar-Canvas Matched Grades in Undergraduate and Graduate Courses across Terms and Sessions",x="",y="")+
+  geom_text(aes(label=ifelse(diff_cat=="Exact match",paste(round(prt*100,0),"%",sep=""),"")),color="white",size=3,hjust=0.8,vjust=0.3)+
+  theme_lz()+theme(axis.text.x = element_blank())
+```
+
+```{r diff_cat by session,fig.height=3.5, fig.cap=paste("Grade Consistency across Sessions of Different Terms \\label{fig:session}") ,include=TRUE}
+plot_session_frmt
+```
+
+As shown in Figure \ref{fig:session}, for undergraduate courses, the lowest grade consistency appears in the main session of 2021 Fall (n=`r f21m`) and 2022 Spring (n=`r s22m`), which is only 70%. Then, the grade consistency increases in session 1 of Fall (n=`r f21.1`) and Spring (n=`r s22.1`). The grade consistency is the best for session2 in Fall (n=`r f21.2`) and Spring (n=`r s22.2`), which are above 90%. 
+
+For undergraduate courses in 2021 summer, the main session (n=`r s21m`) is the highest, which is 81%. It decreases when it moves to session 1 (n=`r s21.1`) and session 2 (n=`r s21.1`) which is only 76% and 64% respectively.
+
+For graduate courses, session 2 has the highest grade consistency of 90% in Fall (n=`r gf21.2`) and Spring (n=`r gs22.2`). Similar grade consistency were observed for main and session 1 in Fall and Spring. In summer, main session (n=`r gs21m`) and session 1 (n=`r gs21.1`) is similar, but session 2 (n=`r gs21.2`) has lower grade consistency.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Grade Consistency by Year
+
+
+```{r load historical dataset}
+#ask eric/heidi if undergrad difference-prt historical data available
+#confirm if historical data in chen's report is grad level course only
+#historical data only exist for graduate level courses; manually added 2021 fall and 2022 spring data/grade for graduate level courses
+exactm_g<-c(.63,.78,.66,.61,.73,.74,.75,.83,.87)
+slightd_g<-c(.21,.16,.20,.21,.21,.15,.14,.14,.11)
+sigd_g<-c(.16,.05,.14,.18,.06,.11,.11,.03,.01)
+histerm_g<-c("2018 Spring","2018 Fall","2019 Spring","2019 Fall","2020 Spring","2020 Fall","2021 Spring","2021 Fall","2022 Spring") %>% factor(levels=c("2018 Spring","2018 Fall","2019 Spring","2019 Fall","2020 Spring","2020 Fall","2021 Spring","2021 Fall","2022 Spring"))#preserve the order of values
+#check
+length(exactm_g)
+length(slightd_g)
+length(sigd_g)
+length(histerm_g)
+#looks right, all have 9 observations
+#check add up to 100%
+exactm_g+slightd_g+sigd_g
+
+#make list a data frame or tibble
+histdata<-tibble(histerm_g,exactm_g,slightd_g,sigd_g)
+#check
+str(histdata)
+#make wide data long
+histdata_long<-histdata%>%pivot_longer(cols = c(exactm_g,slightd_g,sigd_g),names_to = "cat_hist", values_to = "cat_hist_prt")
+#check
+glimpse(histdata_long)
+#factor and recode the cat_his variable
+histdata_long$cat_hist=factor(histdata_long$cat_hist,levels = c("exactm_g","slightd_g","sigd_g"),labels = c("Exact match","Slight difference","Significant difference"))
+#check
+histdata_long%>%group_by(cat_hist)%>%count()
+histdata_long%>%group_by(histerm_g)%>%count()
+
+#line graph
+hist_line<-histdata_long%>%ggplot(aes(x=histerm_g,y=cat_hist_prt,color=cat_hist,group=cat_hist))+
+  geom_line()+
+  scale_color_manual(values = c(mycolors[1],mycolors[3],mycolors[6]))+
+  labs(x="", y="")+ theme_lz()+ theme(axis.text.y = element_blank(),legend.position = "bottom")+
+  geom_text_repel(aes(label=percent(cat_hist_prt,digits=0)),size=3, hjust=1,vjust=0)
+```
+```{r hist_line,fig.cap=paste("Historical Comparison of Grade Consistency 2018-2022 (Graduate Course Grades) \\label{fig:hist}"), include=TRUE}
+hist_line
+```
+
+As shown in Figure \ref{fig:hist}, the canvas-registrar grade consistency for graduate level courses has been improving since 2019 Fall, and reached the highest percentage (87%) in 2022 Spring. However, there are still 10% of courses with significant differences between Canvas and Registrar. 
+
+
+# Appendix: 
+
+## Method: Preparation for Data Analysis
+
+To make the grades comparable, we convert grades in Canvas (i.e., numeric grade in scale of 0-110) and Registrar's Office (i.e.,letter grade in scale of A-F) to GPA grades (i.e. numeric grade in scale of 0-4.0). Figure \ref{fig:conversion} shows the distribution of grades in the Canvas and Registrar system before and after conversion.
+
+```{r prep convert grade scale}
+p1<-canvrp%>%ggplot(aes(x=`current score`,y=canvasgpa))+
+  geom_point()+xlim(0,110)+
+  theme_classic()+xlab("Canvas Scores")+ylab("Canvas GPA")
+
+p2<-canvrp%>%ggplot(aes(x=`Final Grade`,y=registrargpa))+
+  geom_count()+
+  theme_classic()+theme(legend.position="none")+
+  xlab("Registrar Letter Grades")+ylab("Registrar GPA")
+
+library(ggpubr)
+```
+
+```{r convert score/grade to gpa plot, fig.height=3, fig.cap=paste("Canvas and Registrar Grades Before and After Conversion \\label{fig:conversion}"),include=TRUE}
+ggarrange(p1,p2)
+```
+
+## Grades that included and excluded from the analysis
+We used Table \ref{tab:convert} to convert scores and grades.
+
+```{r convert table, include=TRUE}
+library(kableExtra)
+tibble(
+  GPA=c(4,3.7,3.3,3,2.7,2.3,2,1.7,1.3,1,0.7,0),
+ "Registrar grade"=c("A","A-","B+","B","B-","C+","C","C-","D+","D","D-","F"),
+  "Canvas score"=c("93-110","90~93","87~90","83-87","80~83","77~80","73~77","70~73","67~70","63~67","59~63","0-59"))%>% kable(caption = "Converting GPA Scales \\label{tab:convert}") %>%kable_styling(latex_options = "HOLD_position")
+```
+
+
+For grades that are excluded from this analysis, Table \ref{tab:outlier} is a description of the number of scores that are excluded from analysis (table hidden).
+
+Besides, we did not report programs and courses that has small number of observations. That exclusion help to protect students' privacy from possibly individual identifiable students data. Specifically, the following programs are omitted from this report: Service Learning (n=5), Individualized Studies (n=2), Academic Achievement Center (n=9), and WRT109 (n=1).
+```{r}
+#read raw data
+canvas21<-read_excel("/Users/linlizhou/Documents/LASELL/data/progameval/canvas.raw.20-21.xlsx")
+outliertb<-canvas21%>%filter(`current score`>100)%>%group_by(course)%>%summarise(`Grades>110`=n())%>%arrange(desc(`Grades>110`))
+library(gridExtra)
+```
+
+```{r outlier table}
+tibble(outliertb)%>% kable(caption = "Outlier Grades and Corresponding Courses \\label{tab:outlier}") %>%kable_styling(latex_options = "HOLD_position")
+```
+
+## A few more explanation of Codes
+Table \ref{tab.mdsc} shows what's included in Multidisciplinary Studies: table hidden
+
+```{r show MDSC/Multidisciplineary Studies}
+canvrp_ugg_match %>% filter(department=="Multidisciplinary Studies")%>%group_by(`Course ID`, `Course Name`)%>%count()%>%kable(caption = "Multidisciplinary Studies Courses \\label{tab.mdsc}") %>%kable_styling(latex_options = "HOLD_position")
+```
+

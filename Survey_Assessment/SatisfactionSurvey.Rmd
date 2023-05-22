@@ -1,0 +1,58 @@
+---
+title: ""
+author: ''
+date: ""
+classoption: twoside
+header-includes:
+    \usepackage{fancyhdr}
+    \addtolength{\headheight}{0.7cm}
+    
+    \pagestyle{fancy} 
+    \fancyhead{}
+    \fancyfoot{}
+    
+    \fancyhead[LO]{\includegraphics[height=1.3cm]{/Users/linlizhou/Documents/Rprojects/IR.png}}
+    \fancyhead[RE]{\vspace{4mm}\textbf{2022 Satisfaction Survey Results}}
+    \fancyfoot[R]{\thepage}
+    \fancyfoot[L]{Please contact ir@lasell.edu for questions}
+    
+    \renewcommand{\headrulewidth}{0pt}
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    fig_height: 2
+  word_document:
+    toc: no
+    reference_docx: /Users/linlizhou/Documents/Rprojects/lasell.report.IN-USE.docx
+mainfont: Helvetica Light
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning=FALSE, message=FALSE) #show only results
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R") #run code from saved theme and library
+```
+
+```{r contact list}
+#from backup data - load data
+ug22fa<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
+gd22fa<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Graduate/2022 Fall Graduate Backup Data Report.xlsx")
+
+#extract ppid, first last name, email
+##need to be exactly "Email","First Name", "Last Name" as col name to be able to upload on alchemer   
+
+ug22fa%>%filter(!is.na(`Matric Year`))%>%select(`People Code Id`,Name,`Lasell email`)%>%unique()%>%
+  mutate(`Last Name`=str_trim(str_split_fixed(Name,",",2)[,1]),
+         `First Name`=str_trim(str_split_fixed(Name,",",2)[,2]),
+         Email=`Lasell email`)%>%
+  select(`People Code Id`,`First Name`,`Last Name`,Email)%>%
+  write_xlsx("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Student Satisfaction Survey/2022-2023/alchemer contact list/ug22fa_matric.xlsx")
+
+gd22fa%>%filter(Matric_YN=="Y")%>%select(People_Code_Id,Name,Lasell_email)%>%unique()%>%
+  mutate(`Last Name`=str_trim(str_split_fixed(Name,",",2)[,1]),
+         `First Name`=str_trim(str_split_fixed(Name,",",2)[,2]),
+         Email=Lasell_email)%>%
+  select(People_Code_Id,`First Name`,`Last Name`,Email)%>%
+  write_xlsx("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Student Satisfaction Survey/2022-2023/alchemer contact list/gd22fa_matric.xlsx")
+```
+

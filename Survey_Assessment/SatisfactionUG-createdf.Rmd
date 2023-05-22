@@ -1,0 +1,363 @@
+---
+title: "SatisfactionUG-createdf"
+author: "Linli Zhou"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+# ugsatis22.quan based on raw
+
+```{r load.raw}
+raw<-read_csv("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Student Satisfaction Survey/2022-2023/20230103143331-SurveyExport.csv")
+#investigate
+names(raw) #1:52 are starter cols
+lapply(raw[1:22], unique)
+lapply(raw[23:52], unique)
+```
+
+```{r winners}
+#set seed for the sample function
+set.seed(1)
+#check: raw%>%count(Status)
+#only those who completed the survey
+raw%>%filter(Status=="Complete")%>%#nrow()#262 students
+  #sample 262 times from number 1:262 without replacement (do not put back what's sampled)
+  mutate(winnerid=sample(1:nrow(),nrow(),replace=FALSE))%>%
+  #see those id and ppid and email
+  select(winnerid,`Invite Custom Field 1`,Email,`First Name`,`Last Name`)%>%
+  #select id=1~7 to be the winners
+  filter(winnerid<8)%>%arrange(winnerid)%>%View()
+```
+
+
+```{r select.ugsatis22}
+#remove unnecessary starter cols
+ugsatis22<-raw%>%
+  #remove unnecessary starter cols
+  select(-(`Response ID`:`Date Submitted`),#keep status
+        -(`Contact ID`:Source),#keep Invite Custom Field 1
+        -(`Invite Custom Field 2`:`Invite Custom Field 10`))%>%
+  #remove empty rows/cols (including header has to be NA)
+  janitor::remove_empty(c("rows", "cols"))
+
+#remove NA cols
+ugsatis22<-ugsatis22[ , colSums(is.na(ugsatis22)) < nrow(ugsatis22)] #sum each col's # of NA rows, not all rows are NA
+
+# convinient col names:
+ugsatis22<-janitor::clean_names(ugsatis22)
+
+#330 rows/observations
+
+```
+
+```{r renaming.template}
+#renaming rule: 
+#look at the survey questions pdf whem renaming cols
+# start with the same "starter_texts" to questions with the same answer types
+# start with "qual" for qualitative/textual questions
+
+##template below:
+
+#{r rename1.sectionname}
+# df<-df%>%rename( 
+    #section.xx=old name
+    #section.xxx=old name
+    #qual.section.xx=old name
+#)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[52:x], unique)
+
+```
+
+```{r rename1.overall}
+ugsatis22<-ugsatis22%>%rename(
+#basics
+  ppid=invite_custom_field_1,
+  rescom=which_of_the_following_describes_your_status_for_the_2022_fall_semester,
+  
+#sec1. overall impressions
+  overall.facility=overall_facilities_i_e_academic_residential_and_recreational_spaces_please_rate_your_overall_impressions_of_lasell,
+  overall.services=overall_services_please_rate_your_overall_impressions_of_lasell,
+  overall.exp=my_overall_experience_please_rate_your_overall_impressions_of_lasell,
+
+  qual.overall.imprv=what_suggestions_do_you_have_for_lasell_university_about_ways_we_can_improve_students_experience_this_term)
+#check: names(ugsatis22)
+#lapply(ugsatis22[1:6], unique)
+```
+
+```{r rename2.service}
+ ugsatis22<-ugsatis22%>%rename( 
+#sec2. services
+  service.stuaccount=office_of_student_accounts_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.health=health_center_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.i.t.helpdesk=i_t_helpdesk_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.shuttle=campus_shuttle_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.libdb=librarys_online_databases_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.mail=mail_services_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.aac=academic_achievement_center_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.finaid=office_of_student_financial_planning_financial_aid_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.reg=registrars_office_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.career=career_development_center_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.counsel=counseling_center_in_mott_house_or_virtual_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+  service.ic3=intercultural_center_commuter_cottage_ic3_please_rate_your_level_of_satisfaction_with_the_services_or_offices_you_have_used_this_academic_year_for_services_or_offices_you_have_not_used_this_year_please_select_not_used,
+ 
+   #sec1.2 service qual
+  qual.service.stuaccount=please_explain_why_you_are_dissatisfied_with_the_office_of_student_accounts,
+  qual.service.health=please_explain_why_you_are_dissatisfied_with_the_health_center,
+  qual.service.i.t=please_explain_why_you_are_dissatisfied_with_the_i_t_helpdesk,
+  qual.service.shuttle=please_explain_why_you_are_dissatisfied_with_the_campus_shuttle,
+  qual.service.libdb=please_explain_why_you_are_dissatisfied_with_the_librarys_online_databases,
+  qual.service.mail=please_explain_why_you_are_dissatisfied_with_the_mail_services,
+  qual.service.aac=please_explain_why_you_are_dissatisfied_with_the_academic_achievement_center,
+  qual.service.finaid=please_explain_why_you_are_dissatisfied_with_the_office_of_student_financial_planning_financial_aid,
+  qual.service.reg=please_explain_why_you_are_dissatisfied_with_the_registrars_office,
+  qual.service.career=please_explain_why_you_are_dissatisfied_with_the_career_development_center,
+  qual.service.counsel=please_explain_why_you_are_dissatisfied_with_the_counseling_center_on_maple_terrace,
+  qual.service.ic3=please_explain_why_you_are_dissatisfied_with_the_intercultural_center_commuter_cottage_ic3)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[7:30], unique)
+```
+
+```{r rename3.crs}
+ugsatis22<-ugsatis22%>%rename( 
+#sec3. courses
+  crs.connectedlearning=connected_learning_is_integrated_into_my_coursework_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  crs.prgcareer=my_program_is_giving_me_knowledge_and_skills_that_will_be_useful_in_my_career_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  crs.facultyknow=nearly_all_of_the_faculty_are_knowledgeable_in_their_field_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  crs.instructquality=the_quality_of_instruction_i_receive_in_most_of_my_classes_is_excellent_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  crs.gequality=general_education_core_and_elective_courses_are_of_high_quality_here_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  crs.majorquality=instruction_in_courses_within_my_major_is_excellent_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  crs.variety=there_are_a_good_variety_of_courses_provided_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_courses,
+  
+  #sec3.2 course qualitative
+  qual.crs=please_provide_explanations_on_your_satisfaction_ratings_related_to_courses)
+
+#check: names(ugsatis22)
+#lapply(ugsatis22[31:38], unique)
+```
+
+```{r rename4.community}
+ ugsatis22<-ugsatis22%>%rename( 
+#sec4 community
+  community.partof=i_feel_like_an_integral_part_of_the_lasell_university_community_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.worthtuition=tuition_paid_here_is_a_worthwhile_investment_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.facultycare=faculty_care_about_me_as_an_individual_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.acaintegrity=there_is_a_strong_sense_of_academic_integrity_at_lasell_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.facultyavailable=faculty_are_usually_available_after_class_and_during_office_hours_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.registerclass=i_was_able_to_register_for_the_course_types_that_i_wanted_on_campus_online_or_flex_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.fewclassconflict=i_am_able_to_register_for_classes_i_need_with_few_conflicts_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.diverseindiv=i_have_had_positive_experiences_with_individuals_different_than_myself_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.acacommit=there_is_a_commitment_to_academic_excellence_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.voiceheard=i_feel_my_voice_is_heard_as_a_student_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.residcomfort=living_conditions_in_the_residence_halls_are_comfortable_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  community.schoolspirit=lasell_students_have_a_strong_sense_of_school_spirit_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_the_community,
+  #sec4.2 community qual
+  qual.community=please_provide_explanations_on_your_satisfaction_ratings_related_to_the_community
+)
+#check: names(ugsatis22)
+#lapply(ugsatis22[39:51], unique)
+```
+
+```{r rename5.social}
+ ugsatis22<-ugsatis22%>%rename( 
+#sec5 social
+  social.athletics=there_is_a_good_selection_of_intramural_recreational_athletics_on_campus_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_activities,
+  social.weekendact=there_are_a_sufficient_number_of_weekend_activities_for_students_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_activities,
+  social.selectact=there_is_a_good_selection_of_activities_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_activities,
+  social.enjoycampuswkend=i_enjoy_being_on_campus_during_weekends_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_activities,
+  social.knowact=i_generally_know_what_is_happening_on_campus_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_activities,
+  social.pride=i_feel_a_sense_of_pride_about_lasell_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_activities,
+  #sec5.2 social qual
+  qual.social=please_provide_explanations_on_your_satisfaction_ratings_related_to_activities
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[52:58], unique)
+```
+
+```{r rename6.support}
+ ugsatis22<-ugsatis22%>%rename( 
+#sec5 support
+  support.computerlabs=computer_labs_are_adequate_and_accessible_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.police=campus_police_provide_high_quality_service_to_lasell_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.acaneeds=academic_support_services_adequately_meet_my_needs_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.campusmaintain=on_the_whole_the_campus_is_well_maintained_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.facultyfeedback=faculty_provide_timely_feedback_about_my_progress_in_a_course_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.facultydiverse=faculty_take_into_account_student_differences_as_they_teach_a_course_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.facultyresponsive=faculty_staff_are_responsive_when_i_am_seeking_information_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  support.opportunities=there_are_good_opportunities_for_internship_clinical_practicums_here_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_support,
+  #sec5.2 qual support
+  qual.support=please_provide_explanations_on_your_satisfaction_ratings_related_to_academic_and_personal_support
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[59:67], unique)
+```
+
+```{r rename7.food}
+ ugsatis22<-ugsatis22%>%rename( 
+#sec5 food
+  food.select=there_is_an_adequate_selection_of_food_in_the_dining_hall_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_food,
+  food.quality=the_food_on_campus_is_of_good_quality_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_food,
+  food.availability=there_is_usually_at_least_one_dining_option_on_campus_when_i_need_to_eat_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_food,
+  qual.food=please_provide_any_additional_details_on_your_satisfaction_ratings_related_to_food
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[68:71], unique)
+```
+
+```{r rename8.advisor}
+ ugsatis22<-ugsatis22%>%rename( 
+#sec5 academic advisor
+  advisor.setgoal=my_academic_advisor_helps_me_set_goals_to_work_toward_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_your_academic_advisor,
+  advisor.knowmajor=my_academic_advisor_is_knowledgeable_about_requirements_in_my_major_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_your_academic_advisor,
+  advisor.communicate=my_academic_advisor_communicates_with_me_in_a_timely_and_efficient_manner_if_it_applies_to_you_please_rate_how_much_you_agree_or_disagree_with_the_following_statements_regarding_your_own_experiences_related_to_your_academic_advisor,
+  #sec8.2 qual advisor
+  qual.advisor=please_provide_explanations_on_your_satisfaction_ratings_related_to_your_academic_advisor
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[72:75], unique)
+```
+
+```{r rename9.time}
+ ugsatis22<-ugsatis22%>%rename( 
+  timeopt.oncampusjob=working_for_pay_on_campus_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timehr.oncampusjob=hours_working_for_pay_on_campus_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timeopt.offcampusjob=working_for_pay_off_campus_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  timehr.offcampusjob=hours_working_for_pay_off_campus_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timeopt.study=studying_doing_homework_or_group_projects_outside_of_class_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  timehr.study=hours_studying_doing_homework_or_group_projects_outside_of_class_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timeopt.volunteer=volunteering_participating_in_community_service_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  timehr.volunteer=hours_volunteering_participating_in_community_service_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timeopt.club=being_involved_in_club_sponsored_activities_and_or_intramural_sports_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  timehr.club=hours_being_involved_in_club_sponsored_activities_and_or_intramural_sports_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timeopt.athletics=participating_in_intercollegiate_athletics_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  timehr.atheletics=hours_participating_in_intercollegiate_athletics_during_this_current_semester_please_tell_us_how_many_hours_you_spend_in_a_typical_week_7_days_doing_the_following_please_estimate_whole_numbers,
+  
+  timehr.sleep=how_many_hours_on_average_do_you_sleep_per_day
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[76:88], unique)
+
+```
+
+```{r rename10.reenroll}
+ ugsatis22<-ugsatis22%>%rename( 
+  reenroll.lor=how_many_faculty_or_staff_members_do_you_know_well_enough_to_ask_for_a_recommendation_for_a_job_grad_school_etc,
+  reenroll.metexpect=so_far_how_has_your_experience_at_lasell_met_your_expectations,
+  reenroll.reenroll=all_in_all_if_you_had_to_do_it_all_over_again_would_you_enroll_here,
+  reenroll.alumevent=do_you_plan_to_remain_involved_with_lasell_through_alumni_events_after_you_graduate,
+  reenroll.onlineopt=do_you_feel_that_you_would_choose_to_enroll_in_the_reduced_cost_online_course_option_if_it_was_available_in_the_absence_of_a_pandemic,
+  
+  qual.reenroll.career=generally_what_job_are_you_interested_in_starting_after_graduation
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[52:x], unique)
+```
+
+```{r rename11.edresource}
+ ugsatis22<-ugsatis22%>%rename( 
+   edresource.uselaptop=which_of_the_following_best_describes_your_use_of_a_computer_laptop_to_complete_your_academic_work,
+   qual.edresource.uselaptop=other_write_in_required_which_of_the_following_best_describes_your_use_of_a_computer_laptop_to_complete_your_academic_work,
+    edresource.textbook=which_of_the_following_best_describes_how_you_access_your_textbooks_for_the_semester,
+    qual.edresource.textbook=other_write_in_required_which_of_the_following_best_describes_how_you_access_your_textbooks_for_the_semester
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[52:x], unique)
+```
+
+```{r rename12.demography}
+ ugsatis22<-ugsatis22%>%rename( 
+   demography.highschool=which_of_the_following_most_accurately_describes_the_students_at_the_high_school_you_graduated_from,
+   demography.gender=what_is_your_gender_identity_definition_ones_innermost_concept_of_self_as_male_female_a_blend_of_both_or_neither_how_individuals_perceive_themselves_and_what_they_call_themselves_ones_gender_identity_can_be_the_same_or_different_from_their_sex_assigned_at_birth,
+   qual.demography.gender=prefer_to_self_describe_please_specify_what_is_your_gender_identity_definition_ones_innermost_concept_of_self_as_male_female_a_blend_of_both_or_neither_how_individuals_perceive_themselves_and_what_they_call_themselves_ones_gender_identity_can_be_the_same_or_different_from_their_sex_assigned_at_birth,
+   
+   demography.sex=what_is_your_sexual_orientation_definition_an_enduring_emotional_romantic_or_sexual_attraction_to_other_people,
+   qual.demography.sex=prefer_to_self_describe_e_g_questioning_queer_or_pansexual_please_specify_what_is_your_sexual_orientation_definition_an_enduring_emotional_romantic_or_sexual_attraction_to_other_people
+)
+ 
+#check: names(ugsatis22)
+#lapply(ugsatis22[52:x], unique)
+
+```
+
+```{r quanvsqual}
+ugsatis22.quan<-ugsatis22%>%select(!starts_with("qual."))#%>%names()#80
+ugsatis22.qual<-ugsatis22%>%select(starts_with("qual."))#%>%names()#24
+```
+
+```{r mutate.grpdiffvars}
+#see previous year's report seeking grpvars: gender, sex, res/com; ethnicity, school, year, GPA
+#goal: multivariate regression: where (e.g. sections of food stais, etc.) are the differences (e.g. by years, demographics, etc.
+
+#load mutating data
+enroll22f<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
+#select mutate-vars and cleannames
+enroll22f.s<-enroll22f%>%select(`People Code Id`,Degree,Curriculum,`Class level`,`College Attend`,`Transfer YN`,`Cohort Id`,`FT/PT`,Ethnicity,Gender)%>%janitor::clean_names()
+#check: names(enroll22f.s)
+#mutate now
+ugsatis22.quan<-left_join(ugsatis22.quan,enroll22f.s,by=c("ppid"="people_code_id"))
+```
+
+```{r hide.save_ugsatis22quanqual}
+#wb<-createWorkbook()
+#addWorksheet(wb,"ugsatis22.quan");writeData(wb,sheet = "ugsatis22.quan",x=ugsatis22.quan)
+#addWorksheet(wb,"ugsatis22.qual");writeData(wb,sheet = "ugsatis22.qual",x=ugsatis22.qual)
+#saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Student Satisfaction Survey/2022-2023/working.xlsx",overwrite = TRUE)
+```
+
+# ugsatis22.recoded
+```{r ugsatis22.recoded}
+#Grouping items together to create a metric
+#ignore: ugsatis22.timeopt, ugsatis22.timehr, ugsatis22.resource, ugsatis22.overall, ugsatis22.reenroll
+#include: ugsatis22.service,ugsatis22.acagrp,ugsatis22.socgrp,ugsatis22.resgrp
+ugsatis22.recoded<-ugsatis22.quan%>%
+  select(starts_with("service."),names_acagrp,names_socgrp,names_resgrp,ppid,gpvar.names)%>%#lapply(unique)
+  mutate(across(c(starts_with("service."),names_acagrp,names_socgrp,names_resgrp),
+       ~ recode(.x, "Not Used"="0", "<strong>Not Applicable</strong>"="0", "Extremely Dissatisfied"="0", "Dissatisfied"="0", "Strongly Disagree"="0", "Disagree"="0", "Satisfied"="1", "Extremely Satisfied"="1", "Agree"="1", "Strongly Agree"="1")),
+across(c(starts_with("service."),names_acagrp,names_socgrp,names_resgrp),
+       ~ as.numeric(.x)),
+sum.service=rowSums(across(c(starts_with("service."))),na.rm=TRUE),
+sum.aca=rowSums(across(c(names_acagrp)),na.rm=TRUE),
+sum.soc=rowSums(across(c(names_socgrp)),na.rm=TRUE),
+sum.res=rowSums(across(c(names_resgrp)),na.rm=TRUE))
+#outcome vars: sum.service,sum.aca,sum.soc,sum.res
+
+#Vars: 
+#school (majors "curriculum")
+#"demography.gender"
+#"ethnicity" 
+#"class_level"
+#"transfer_yn"
+#"rescom"
+#1st gen?
+#pell eligible?
+#high school gpa?
+#load dmt
+dmt<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Datamart Files/DataMart To Date/Final Datamart up to Date 09262022.xlsx")#check:names(dmt);dmt%>%count(FA_Pell_ELIGIBLE_YN)%>%View()
+dmt.s<-dmt%>%select(PC_ID,RESIDENT_YN,ACADEMIC_DEPT,HS_GPA,FA_Pell_ELIGIBLE_YN,PARENTS_ATTENDED_COLL)%>%clean_names()
+#mutate
+ugsatis22.recoded<-left_join(ugsatis22.recoded, dmt.s, by=c("ppid"="pc_id"))
+#finaid<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Fin Aid Sharing/Freeze Fall 2022 Undergrad.xlsx")
+```
+
+```{r save.recodeddf-hide}
+#wb<-createWorkbook()
+#addWorksheet(wb,"ugsatis22.recoded");writeData(wb,sheet = "ugsatis22.recoded",x=ugsatis22.recoded)
+#saveWorkbook(wb,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/Student Satisfaction Survey/2022-2023/ugsatis22.recoded.xlsx",overwrite = TRUE)
+```
+

@@ -1,0 +1,3487 @@
+---
+title: "CourseReqreuimentImpact"
+author: "Linli Zhou"
+date: "2022-08-23"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(tidyverse)
+library(stringr)
+library(writexl)
+library(RCurl)#web scrapping html
+library(XML)#web scrapping html
+library(rvest)#web scrapping html
+```
+
+# Set Up Data
+```{r load data}
+#which sheet
+excel_sheets("/Users/linlizhou/Documents/LASELL/data/enrollment/All Course Requirements.xlsx")
+#read data
+data<-read_excel("/Users/linlizhou/Documents/LASELL/data/enrollment/All Course Requirements.xlsx",sheet = "Data")
+```
+
+```{r select major}
+#remove mutated summary col 3-6; remove minors
+dat.major<-data%>%select(-names(data)[3:6],-ends_with("Minor"))
+
+#remove NA rows in section
+dat.major<-dat.major[!is.na(dat.major$Section),]#removed last several NA rows, change from 941 to 935 row
+```
+
+
+# 43 Majors
+
+## Accounting
+
+```{r archive html-accounting}
+#read html and parse it into R readable contents
+#pg<-htmlParse(getURL("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/accounting-21-22.html"))
+#look at all names and counts of names
+#summary(pg)
+#read the table within html contents and save it as a tibble
+#crs.tbl<-readHTMLTable(pg,stringsAsFactors = FALSE)%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make a course list
+#names(crs.tbl)="course" #rename tibble from NULL to "course" so that I can call it by its name without causing error
+#df<-crs.tbl$course#finally got a dataframe of 3 vars
+
+#needs to confirm if the last item is blank, if yes, select the 1:length-1 for crs
+#crs<-df$`Course Code`[1:length(df$`Course Code`)-1]#character not a list; remove the last item -- which is a blank row
+#crs.df<-data.frame(Section=crs)%>%filter(!grepl("School",Section),!grepl("Core Courses",Section))#remove first two lables that separate all requried courese
+#now we got the list of all html courses (with a label separator between required vs elective courses)
+```
+
+```{r html-accounting}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/accounting-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using nodes (html tags or css class) and print text
+# #pg %>% html_nodes("body")%>%html_text()#indeed all contents of body
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+```
+
+
+```{r  find the right texts in html-accounting}
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 26 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r make a section-title df }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+3) )  {#must (any calculation)
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+
+  #add one to go to next index
+  i<-i+1
+}
+#check
+my.title
+#remove empty -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+
+```{r append new courses using crs.df }
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#change from 935 to 947 with appended rows
+```
+
+
+```{r keep core course and recode using crs.df }
+#investigate
+dat.major%>%group_by(Accounting)%>%count()
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(Accounting=case_when(
+    Accounting=="C"~"Core",
+    Section %in% crs.df$Section[1:21] ~"Required",
+    Section %in% crs.df$Section[23:27] ~"Elective"))#%>%group_by(Accounting)%>%count()#check directly after mutate, before assign it to df
+```
+
+## Entrepreneurship
+
+```{r html-Entrepreneurship}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/Entrepreneurship-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using nodes (html tags or css class) and print text
+ #pg %>% html_nodes("body")%>%html_text()#indeed all contents of body
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+```
+
+
+```{r  }
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#change from 947 to 948 with appended rows BUSS407
+```
+
+```{r  }
+#investigate
+dat.major%>%group_by(Entrepreneurship)%>%count()
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(Entrepreneurship=case_when(
+    Entrepreneurship=="C"~"Core",
+    Section %in% crs.df$Section[1:18] ~"Required",
+    Section %in% crs.df$Section[19:29] ~"Elective"))#%>%group_by(Entrepreneurship)%>%count()#check directly after mutate, before assign it to df
+```
+
+## Event Management
+
+```{r html-`Event Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/event-management21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+```
+
+
+```{r  }
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#no change 948
+```
+
+```{r  }
+#investigate
+dat.major%>%group_by(`Event Management`)%>%count()
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Event Management`=case_when(
+    `Event Management`=="C"~"Core",
+    Section %in% crs.df$Section[1:20] ~"Required",
+    Section %in% crs.df$Section[21:35] ~"Elective"))#%>%group_by(`Event Management`)%>%count()#check directly after mutate, before assign it to df
+```
+
+
+## Business Management
+
+```{r html-`Business Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/business-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+```
+
+
+```{r  }
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#no change 948
+```
+
+```{r  }
+
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Business Management`=case_when(
+   # `Business Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:18] ~"Required",
+    Section %in% crs.df$Section[19:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Business Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Business Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+## Esports and Gaming Management
+
+```{r html-`Esports and Gaming Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/esports-and-gaming-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r append and mutate/recode }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Esports and Gaming Management`=case_when(
+   # `Esports and Gaming Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:19] ~"Required",
+    Section %in% crs.df$Section[20:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Esports and Gaming Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Esports and Gaming Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+## Corporate Finance
+
+```{r html-`Corporate Finance`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/finance-21-22/corporate-finance21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Corporate Finance`=case_when(
+   # `Corporate Finance`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Corporate Finance`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Corporate Finance`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+## Personal Finance
+
+```{r html-`Personal Finance`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/finance-21-22/personal-finance-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Personal Finance`=case_when(
+   # `Personal Finance`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Personal Finance`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Personal Finance`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+## Hospitality Management
+
+```{r html-`Hospitality Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/hospitality-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Hospitality Management`=case_when(
+   # `Hospitality Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:20] ~"Required",
+    Section %in% crs.df$Section[21:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Hospitality Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Hospitality Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+## Human Resource Management
+
+```{r html-`Human Resource Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/human-resource-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Human Resource Management`=case_when(
+   # `Human Resource Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Human Resource Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Human Resource Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+## Marketing
+
+```{r html-`Marketing`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/marketing-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Marketing`=case_when(
+   # `Marketing`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:18] ~"Required",
+    Section %in% crs.df$Section[19:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Marketing`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Marketing`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+## Professional Sales
+
+```{r html-`Professional Sales`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/professional-sales-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Professional Sales`=case_when(
+   # `Professional Sales`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:15] ~"Required",
+    Section %in% crs.df$Section[16:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Professional Sales`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Professional Sales`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+## Resort and Casino Management
+
+```{r html-`Resort and Casino Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/resort-and-casino-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Resort and Casino Management`=case_when(
+   # `Resort and Casino Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Resort and Casino Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Resort and Casino Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+## Sport Management
+
+```{r html-`Sport Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/sport-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Sport Management`=case_when(
+   # `Sport Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:21] ~"Required",
+    Section %in% crs.df$Section[22:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Sport Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Sport Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Supply Chain Management
+
+```{r html-`Supply Chain Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/supply-chain-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Supply Chain Management`=case_when(
+   # `Supply Chain Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:18] ~"Required",
+    Section %in% crs.df$Section[19:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Supply Chain Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Supply Chain Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+## Communication
+
+```{r html-`Communication`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/communication--21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Communication`=case_when(
+   # `Communication`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:15] ~"Required",
+    Section %in% crs.df$Section[16:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Communication`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Communication`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Entertainment Media
+
+```{r html-`Entertainment Media`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/entertainment-media-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Entertainment Media`=case_when(
+   # `Entertainment Media`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:20] ~"Required",
+    Section %in% crs.df$Section[21:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Entertainment Media`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Entertainment Media`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Graphic Design
+
+```{r html-`Graphic Design`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/graphic-design-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Graphic Design`=case_when(
+   # `Graphic Design`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Graphic Design`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Graphic Design`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## Journalism
+
+```{r html-`Journalism`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/journalism-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Journalism`=case_when(
+   # `Journalism`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:19] ~"Required",
+    Section %in% crs.df$Section[20:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Journalism`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Journalism`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+## Public Relations
+
+```{r html-`Public Relations`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/public-relations-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Public Relations`=case_when(
+   # `Public Relations`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:20] ~"Required",
+    Section %in% crs.df$Section[length(crs.df$Section)] ~"Elective"))#%>%group_by(`Public Relations`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Public Relations`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Radio and Video Production
+
+```{r html-`Radio and Video Production`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/radio-and-video-production-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`RadioVideoProdu`=case_when(
+   # `RadioVideoProdu`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`RadioVideoProdu`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`RadioVideoProdu`)%>%count()#non-existing major
+
+#rename
+dat.major<-dat.major%>%rename(`Radio and Video Production`=RadioVideoProdu)#using rename to add the major name as is
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Sport Communication
+
+```{r html-`Sport Communication`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/sport-communication-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Sport Communication`=case_when(
+   # `Sport Communication`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:20] ~"Required",
+    Section %in% crs.df$Section[21:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Sport Communication`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Sport Communication`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Fashion Media and Marketing
+
+```{r html-`Fashion Media and Marketing`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/fashion-21-22/fashion-media-and-marketing21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Fashion Media and Marketing`=case_when(
+   # `Fashion Media and Marketing`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:25] ~"Required",
+    Section %in% crs.df$Section[26:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Fashion Media and Marketing`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Fashion Media and Marketing`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Fashion Design and Production
+
+```{r html-`Fashion Design and Production`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/fashion-21-22/fashion-design-and-production-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Fashion Design and Production`=case_when(
+   # `Fashion Design and Production`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Fashion Design and Production`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Fashion Design and Production`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Fashion Merchandising and Management
+
+```{r html-`Fashion Merchandising and Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/fashion-21-22/fashion-merchandising-and-management21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Fashion Merchandising and Management`=case_when(
+   # `Fashion Merchandising and Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Fashion Merchandising and Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Fashion Merchandising and Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Applied Mathematics
+
+```{r html-`Applied Mathematics`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/applied-mathematics-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Applied Mathematics`=case_when(
+   # `Applied Mathematics`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Applied Mathematics`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Applied Mathematics`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+## Biochemistry
+
+```{r html-`Biochemistry`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/biochemistry-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Biochemistry`=case_when(
+   # `Biochemistry`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Biochemistry`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Biochemistry`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Cybersecurity
+
+```{r html-`Cybersecurity`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/cybersecurity-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Cybersecurity`=case_when(
+   # `Cybersecurity`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Cybersecurity`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Cybersecurity`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+## Data Analytics
+
+```{r html-`Data Analytics`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/data-analytics-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Data Analytics`=case_when(
+   # `Data Analytics`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:17] ~"Required",
+    Section %in% crs.df$Section[18:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Data Analytics`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Data Analytics`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## Exercise Science
+
+```{r html-`Exercise Science`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/exercise-science-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Exercise Science`=case_when(
+   # `Exercise Science`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:25] ~"Required",
+    Section %in% crs.df$Section[26:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Exercise Science`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Exercise Science`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+## Fitness Management
+
+```{r html-`Fitness Management`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/fitness-management-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Fitness Management`=case_when(
+   # `Fitness Management`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:23] ~"Required",
+    Section %in% crs.df$Section[24:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Fitness Management`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Fitness Management`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+## Forensic Science
+
+```{r html-`Forensic Science`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/forensic-science-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Forensic Science`=case_when(
+   # `Forensic Science`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:length(crs.df$Section)] ~"Required"))#%>%group_by(`Forensic Science`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Forensic Science`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Health Science
+
+```{r html-`Health Science`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/health-science-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Health Science`=case_when(
+   # `Health Science`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:21] ~"Required",
+    Section %in% crs.df$Section[22:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Health Science`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Health Science`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Public and Community Health
+
+```{r html-`Public and Community Health`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/public-and-community-health-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Public and Community Health`=case_when(
+   # `Public and Community Health`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:16] ~"Required",
+    Section %in% crs.df$Section[17:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Public and Community Health`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Public and Community Health`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Criminal Justice
+
+```{r html-`Criminal Justice`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/criminal-justice-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Criminal Justice`=case_when(
+   # `Criminal Justice`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:17] ~"Required",
+    Section %in% crs.df$Section[18:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Criminal Justice`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Criminal Justice`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Early Childhood Education
+
+```{r html-`Early Childhood Education`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/education21-22/early-childhood-education-(pre-kindergarten-grade-2)-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Early Childhood Education`=case_when(
+   # `Early Childhood Education`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:23] ~"Required",
+    Section %in% crs.df$Section[24:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Early Childhood Education`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Early Childhood Education`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Elementary Education
+
+```{r html-`Elementary Education`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/education21-22/elementary-education-(grades-1-6)21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Elementary Education`=case_when(
+   # `Elementary Education`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:23] ~"Required",
+    Section %in% crs.df$Section[24:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Elementary Education`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Elementary Education`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Secondary Education and English
+
+```{r html-`Secondary Education and English`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/education21-22/secondary-education-major-(grades-5-12)-and-english-major-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Secondary Education and English`=case_when(
+   # `Secondary Education and English`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:20] ~"Required",
+    Section %in% crs.df$Section[21:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Secondary Education and English`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Secondary Education and English`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Secondary Education and History
+
+```{r html-`Secondary Education and History`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/education21-22/secondary-education-major-(grades-5-12)and-history-major-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Secondary Education and History`=case_when(
+   # `Secondary Education and History`=="C"~"Core", #hide for not-existing major
+    Section %in% c(crs.df$Section[1:9],crs.df$Section[17:length(crs.df$Section)]) ~"Required",
+    Section %in% crs.df$Section[10:16] ~"Elective"))#%>%group_by(`Secondary Education and History`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Secondary Education and History`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+## Education, Curriculum and Instruction
+
+```{r html-`Education, Curriculum and Instruction`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/education21-22/interdisciplinary-studies-education-curriculum-and-instruction-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Education, Curriculum and Instruction`=case_when(
+   # `Education, Curriculum and Instruction`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:15] ~"Required",
+    Section %in% crs.df$Section[16:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Education, Curriculum and Instruction`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Education, Curriculum and Instruction`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## English
+
+```{r html-`English`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/english-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`English`=case_when(
+   # `English`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:6] ~"Required",
+    Section %in% crs.df$Section[7:length(crs.df$Section)] ~"Elective"))#%>%group_by(`English`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`English`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Global Studies
+
+```{r html-`Global Studies`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/global-studies-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Global Studies`=case_when(
+   # `Global Studies`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:13] ~"Required",
+    Section %in% crs.df$Section[14:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Global Studies`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Global Studies`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+```{r html-`History`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/history-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`History`=case_when(
+   # `History`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:8] ~"Required",
+    Section %in% crs.df$Section[9:length(crs.df$Section)] ~"Elective"))#%>%group_by(`History`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`History`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Law and Public Affairs
+
+```{r html-`Law and Public Affairs`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/law-and-public-affairs-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Law and Public Affairs`=case_when(
+   # `Law and Public Affairs`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:17] ~"Required",
+    Section %in% crs.df$Section[18:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Law and Public Affairs`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Law and Public Affairs`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Legal Studies
+
+```{r html-`Legal Studies`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/legal-studies-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Legal Studies`=case_when(
+   # `Legal Studies`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:13] ~"Required",
+    Section %in% crs.df$Section[14:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Legal Studies`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Legal Studies`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Psychology
+
+```{r html-`Psychology`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/psychology-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Psychology`=case_when(
+   # `Psychology`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:13] ~"Required",
+    Section %in% crs.df$Section[14:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Psychology`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Psychology`)%>%count()#non-existing major
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Sociology
+
+```{r html-`Sociology`}
+#read html and parse it into R readable contents
+pg<-read_html("https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-/sociology-21-22.html#tab-2")
+#look at it (a list object that contains the tree-like structure)
+pg
+#search using css class as nodes
+pg %>% html_nodes(".mp-modal")%>%html_text()#we must add a . before the class name
+
+####  
+#read the table within html contents and save it as a tibble
+crs.tbl<-pg %>% html_nodes(".mp-modal")%>%html_text()%>%as_tibble() #a tibble of 30 observation of 1 var
+
+#make data frame with named col
+crs.df<-data.frame(Section=crs.tbl$value)
+#now we got the list of all html courses
+```
+
+
+```{r  }
+###make a list of titles
+my.title<-c()#initialize a empty list
+for (i in 1:(nrow(crs.df)+10) )  {#must (any calculation)  #depends on the number (i.e., n) of category/label in the table on web, there would needs to be n+nrow to look at
+  my.title[[i]]<-#have to use [[]] to indicate the list index
+    pg%>%html_nodes(
+    xpath=paste0("/html/body/div[1]/main/div/div/div[1]/div/div/div/div[2]/div[1]/table/tbody/tr[",i,"]/td[2]"#paste the xpath using i
+      )) %>% html_text()# print out corresponding text to nodes
+  i<-i+1 #add one to go to next index
+}
+#check
+my.title
+#remove empty and null -- using any letters
+my.title<-my.title[str_detect(my.title,"[A-Z][a-z]")]
+
+########mutate title into crs.df
+crs.df<-
+  crs.df%>%mutate(`Course Title`=my.title)
+```
+
+```{r  }
+######append new coureses
+#inspect - filter out not in the dat.major courese and new those courese as new.crs.df; remove the last label patterns using filter grepl
+new.crs.df<-crs.df%>%filter((crs.df$Section %in% dat.major$Section ) == FALSE)
+
+#append new.df with dat.major
+dat.major<-plyr::join_all(list(dat.major,new.crs.df),type = "full")#add to 954
+
+######keep core course and recode
+#recode using case_when (new var= old var name)
+dat.major<-
+  dat.major%>%mutate(`Sociology`=case_when(
+   # `Sociology`=="C"~"Core", #hide for not-existing major
+    Section %in% crs.df$Section[1:13] ~"Required",
+    Section %in% crs.df$Section[14:length(crs.df$Section)] ~"Elective"))#%>%group_by(`Sociology`)%>%count()#check directly after mutate, before assign it to df
+
+#check
+dat.major%>%group_by(`Sociology`)%>%count()#non-existing major
+```
+
+
+
+
+# Select only col in the web major list
+
+```{r define majors vs col names}
+#define col names
+major.col<-colnames(dat.major)
+#define major list (from website: https://www.lasell.edu/academics/academic-catalog-21-22/undergraduate-catalog-21-22/programs-of-study-.html)
+major.list<-c("Accounting",
+"Business Management",
+"Entrepreneurship",
+"Esports and Gaming Management",
+"Event Management",
+"Finance",
+"Corporate Finance",
+"Personal Finance",
+"Hospitality Management",
+"Human Resource Management",
+"Marketing",
+"Professional Sales",
+"Resort and Casino Management",
+"Sport Management",
+"Supply Chain Management",
+"Communication",
+"Entertainment Media",
+"Graphic Design",
+"Journalism",
+"Public Relations",
+"Radio and Video Production",
+"Sport Communication",
+"Fashion Media and Marketing",
+"Fashion Design and Production",
+"Fashion Merchandising and Management",
+"Applied Mathematics",
+"Biochemistry",
+"Biology",
+"Cybersecurity",
+"Data Analytics",
+"Exercise Science",
+"Fitness Management",
+"Forensic Science",
+"Health Science",
+"Public and Community Health",
+"Criminal Justice",
+"Early Childhood Education",
+"Elementary Education",
+"Secondary Education and English",
+"Secondary Education and History",
+"Education, Curriculum and Instruction",
+"English",
+"Global Studies",
+"History",
+"Law & Public Affairs",
+"Legal Studies",
+"Psychology",
+"Sociology")%>%as.vector()
+
+```
+
+```{r select col using major.list}
+#check any character not match
+major.list[(major.list%in%major.col)==FALSE]#none, all major list from web are mutated into the dat.major df
+
+#select
+dat.48major<-dat.major%>%select(Section,`Course Title`,major.list[1:length(major.list)])
+```
+
+
+```{r check and save}
+#check Course Title for Newly Added Course IDs
+dat.48major[is.na(dat.48major$`Course Title`),1]#all courses have a title now
+
+#check
+str(dat.48major)
+summary(dat.48major)
+#save
+write_xlsx(dat.48major,"/Users/linlizhou/Documents/LASELL/data/enrollment/21-22CourseRequirements.xlsx")
+
+```
+

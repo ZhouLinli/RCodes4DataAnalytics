@@ -1,0 +1,1281 @@
+---
+title: ""
+author: ''
+date: ""
+classoption: twoside
+header-includes:
+    \usepackage{fancyhdr}
+    \addtolength{\headheight}{0.7cm}
+    
+    \pagestyle{fancy} 
+    \fancyhead{}
+    \fancyfoot{}
+    
+    \fancyhead[LO]{\includegraphics[height=1.3cm]{/Users/linlizhou/Documents/Rprojects/IR.png}}
+    \fancyhead[RE]{\vspace{4mm}\textbf{2022 First Impression Survey Results}}
+    \fancyfoot[R]{\thepage}
+    \fancyfoot[L]{Please contact ir@lasell.edu for questions}
+    
+    \renewcommand{\headrulewidth}{0pt}
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    fig_height: 2
+  word_document:
+    toc: no
+    reference_docx: /Users/linlizhou/Documents/Rprojects/lasell.report.IN-USE.docx
+mainfont: Helvetica Light
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning=FALSE, message=FALSE) #show only results
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R") #run code from saved theme and library
+```
+
+```{r load survey data}
+#read fis.origional (download from alchemer)
+fis.original<-read_csv("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/20221013124928-SurveyExport.csv")
+
+#since the survey is complted in two phrases: phase one respondents only have their email (becasue it's a public link that cannot link back to a ppid as set in the contact list), phase two (when we send individual email invitation to those who have not completed the survey) respondents' ppid are included as custom invite field.
+#we need to find those ppid for students who used email as their unique identifier
+
+#fis.original email rename
+fis.original<-fis.original%>%
+  rename(email=`Please provide your Lasell email address. This information is needed for research purposes. Your personal information will be kept confidential and will not appear on any report. `)
+#fis.original email.short (only keep anything before @lasell.edu) for better match with other datasets
+fis.original<-fis.original%>%
+  mutate(email.short=gsub("@lasell.edu","",fis.original$email),#remove extra to keep all values the same format
+         email.short=str_to_lower(email.short))%>%  #lower case
+  select(-email)#to avoid too many cols get merged
+
+
+#helper dataset (containing all students' email as well as corresponding ppid)
+allstu<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
+#select 2022 cohort (the students that are supposed to answer first impression survey) and other needed vars
+allstu22<-allstu%>%
+  filter(`Cohort Id`=="2022")%>%#this year's students
+  select(`People Code Id`, Name,`Lasell email`,
+         `Transfer YN`,`Res/Comm`,Gender,Ethnicity,`FT/PT`)%>%#select all usable vars
+  rename(gender=Gender)#to avoid join by "Gender"
+
+#create email.short (to match with fis.origional short.email)
+allstu22<-allstu22%>%
+  mutate(email.short=gsub("@lasell.edu","",allstu22$`Lasell email`),#remove extra to match fis.original emails
+         email.short=str_to_lower(email.short))%>%#keep lower case format
+  select(-`Lasell email`)#avoid too many cols get merged
+
+# fullfill_fis.original's ppid by left_join based on email
+#merge--keep the fis.origional students
+fis.original<-left_join(fis.original,allstu22,by="email.short")
+#all fis.original with a valid email will have a ppid and names now
+
+#check: sum(is.na(fis.original$`People Code Id`));
+#sum(is.na(fis.original$Name))
+##only 16 do not find a matched ppid/name
+```
+
+
+```{r fis.s}
+#decide to separate the (ppid_fullfilled) raw data (i.e. fis.origional) and the about to create renamed data (i.e. fis.s)
+
+#remove unnecessary starter cols
+fis.s<-fis.original%>%select(-(`Response ID`:`Date Submitted`),-(`Contact ID`:Source),-(`Invite Custom Field 2`:Gender))%>%#removed 54 cols
+  janitor::remove_empty(c("rows", "cols"))#remove empty rows/cols (including header has to be NA), removed 1 rows
+
+#remove NA cols: nothing get removed
+fis.s<-fis.s[ , colSums(is.na(fis.s)) < nrow(fis.s)] #sum each col's # of NA rows, as long as not all rows are NA then select them 
+
+#check: names(fis)[names(fis)%in%names(fis.s)==FALSE]
+
+
+#ppid col
+#check: sum(is.na(fis.s$`Invite Custom Field 1`));
+#sum(is.na(fis.s$`People Code Id`))#148vs15
+#there are currently two ppid cols; one from the left_join (based on email.short) and the second from students who complete the survey via reminder (based on a contact list with ppid/invited custom field 1)
+
+#keep only one ppid:
+fis.s<-fis.s%>%mutate(ppid=if_else(!is.na(`Invite Custom Field 1`),`Invite Custom Field 1`,#if settled by field then field
+     `People Code Id`))%>%#if not settled, then matched id
+  select(-`Invite Custom Field 1`,-`People Code Id`)
+
+#check: sum(is.na(fis.s$ppid))#14 without ppid
+
+
+#look at the survey instruction using lapply(fis.s, unique)
+#rename cols
+fis.s<-fis.s%>%rename(
+  RCstatus=`Which of the following describes your status for the 2022 fall semester?`,
+#satisfaction 0-6 scale  
+  satis.activity=`Campus-wide programs and activities (virtual or in-person)?:Please tell us how satisfied you are with…`,
+  satis.activity.cm=`Comment or example::Please tell us how satisfied you are with…...58`,
+  
+  satis.overallcourse=`Your courses overall so far?:Please tell us how satisfied you are with…`,
+  satis.majorcourse=`Your courses within your major so far? (If you are an undeclared major, please leave blank):Please tell us how satisfied you are with…`,
+  satis.course.cm=`Comment or example::Please tell us how satisfied you are with…...61`,
+  
+  satis.acchallenge=`The degree of academic challenge in your courses?:Please tell us how satisfied you are with…`,
+  satis.acchallenge.cm=`Comment or example::Please tell us how satisfied you are with…...63`,
+
+  satis.accommit=`Other students' commitment to their studies?:Please tell us how satisfied you are with…`,
+  satis.accommit.cm=`Comment or example::Please tell us how satisfied you are with…...65`,
+  
+  satis.foodav=`Food service availability on campus?:Please tell us how satisfied you are with…`,
+  satis.foodav.cm=`Comment or example::Please tell us how satisfied you are with…...67`,
+  
+  satis.residstaff=`Residential Life staff?:Please tell us how satisfied you are with…`,
+  satis.residstaff.cm=`Comment or example::Please tell us how satisfied you are with…...69`,
+  
+  satis.residhall=`Your living situation in the residence halls?:Please tell us how satisfied you are with…`,
+  satis.residhall.cm=`Comment or example::Please tell us how satisfied you are with…...71`,
+
+#connection 0-6 scale  
+  connect.faculty=`Faculty?:How connected do you feel to…`,
+  connect.faculty.cm=`Comment or example::How connected do you feel to…...73`,
+  
+  connect.stu=`Other students?:How connected do you feel to…`,
+  connect.stu.cm=`Comment or example::How connected do you feel to…...75`,
+
+#emphasis question: 4 text scale  
+  emphasize.acsupport=`Using learning support services (tutoring services, writing center, etc):Based on your experience so far, how much does Lasell University emphasize the following?`,
+  emphasize.socoppo=`Providing opportunities to be involved socially:Based on your experience so far, how much does Lasell University emphasize the following?`,
+  emphasize.campactivity=`Attending campus activities and events (virtual or in-person):Based on your experience so far, how much does Lasell University emphasize the following?`,
+  emphasize.issueevents=`Attending events that address important social, economic, or political issues:Based on your experience so far, how much does Lasell University emphasize the following?`,
+
+#satisfaction 0-6 scale
+  service.aac=`Academic Achievement Center:Please tell us how satisfied you are with…`,
+  service.aac.cm=`Comment or Example::Please tell us how satisfied you are with…...81`,
+
+  service.classtech=`Classroom Technology and Computer Labs:Please tell us how satisfied you are with…`,
+  service.classtech.cm=`Comment or Example::Please tell us how satisfied you are with…...83`,
+
+  service.counseling=`Counseling Center (Located at 18 Maple Terrace):Please tell us how satisfied you are with…`,
+  service.counseling.cm=`Comment or Example::Please tell us how satisfied you are with…...85`,
+
+  service.acadvisor=`Your academic advisor:Please tell us how satisfied you are with…`,
+  service.acadvisor.cm=`Comment or Example::Please tell us how satisfied you are with…...87`,
+
+  service.health=`Health Services (Located in Edwards Student Center):Please tell us how satisfied you are with…`,
+  service.health.cm=`Comment or Example::Please tell us how satisfied you are with…...89`,
+
+  service.techhelp=`Technology Help Desk:Please tell us how satisfied you are with…`,
+  service.techhelp.cm=`Comment or Example::Please tell us how satisfied you are with…...91`,
+
+  service.shuttle=`Lasell Shuttle:Please tell us how satisfied you are with…`,
+  service.shuttle.cm=`Comment or Example::Please tell us how satisfied you are with…...93`,
+
+  service.other=`Please type the service(s) in to the box (i.e. vending, mailroom, washing/drying etc.):Please provide feedback on any other services on campus we have not mentioned in the previous questions.`,
+  service.other.cm=`Feedback::Please provide feedback on any other services on campus we have not mentioned in the previous questions.`,
+
+#academic 0-6 scale
+  meetacexpect=`Is the college meeting your expectations in terms of academic experience?:Please tell us a little bit about what you think of Lasell's academics.`,
+  meetacexpect.cm=`Comment or example::Please tell us a little bit about what you think of Lasell's academics.`,
+
+  faculty.orgmaterial=`Present material in a well-organized way?:How often do your faculty…`,
+  faculty.explain=`Make good use of examples and illustrations to explain difficult points?:How often do your faculty…`,
+  faculty.prep=`Come to class well prepared?:How often do your faculty…`,
+  faculty.command=`Have a good command of what they are teaching?:How often do your faculty…`,
+
+#outside class 0-6 agreement
+  interact.outside=`I have had a positive interaction with at least one Lasell faculty or staff member outside of class.:How much do you agree…`,
+  interact.cm=`How have you been able to effectively interact with others in the Lasell community in a safe manner so far this semester?`,
+  interact.difficulty=`What are the difficulties you’re facing when interacting with others within the Lasell community this semester?`)
+
+#write.xlsx(fis.s,"/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/raw_renamed.xlsx")
+```
+
+
+
+# 2022 First Impression Survey
+
+## Executive Summary
+
+Major findings from the 2022 First Impression Survey are listed below. They indicate several strengths and opportunities of improving first-year students experiences at Lasell University.
+
+### Strengths
+* __Academic satisfaction__ remain high (over 90% on average) among first-year students
+
+* Usage of __academic achievement center__ and __academic adviser__ have increased for first-year students
+
+* First-year students' satisfaction towards __Tech HelpDesk__ and __Counseling Center__ have increased
+
+* __Teaching quality__ for first-year courses has been increasing steadily over the past three years
+
+* __Connection among first year students__ increased compared to previous years
+
+* First-year students from __Hispanic and Black ethnicity__ are highly satisfied with counseling services
+
+
+### Opportunities
+* Food availability can be improved
+  + First-year students want __late night and weekend hours__ for food
+* More __events and activities__ to help first-year students feel socially supported
+  + "Connections need time and opportunity to build"
+
+\newpage
+
+```{r respondents vs allstu SAVE fis.allstu}
+#full merge survey data with all population data for background vars comparisions
+#data merge full
+#fis.s distinguish_var value
+fis.s<-fis.s%>%mutate(RespondentOverall="Respondents")
+#allstu22 distinguish_var value
+allstu22<-allstu22%>%mutate(RespondentOverall="All First-Year")%>%rename(ppid=`People Code Id`)
+#merge
+fis.allstu<-full_join(fis.s,allstu22)
+
+#response rate
+num.response=fis.allstu%>%filter(RespondentOverall=="Respondents")%>%nrow()
+num.overall=fis.allstu%>%filter(RespondentOverall=="All First-Year")%>%nrow()
+response_rate=formattable::percent(num.response/num.overall,digits=0)
+
+#clean df: one RCstatus col in fis.allstu
+fis.allstu<-fis.allstu%>%mutate(Res_Com=if_else(!is.na(RCstatus),#if settled by RC then RC
+          RCstatus,`Res/Comm`))%>%#if not settled, then res/com from allstu
+  select(-RCstatus,-`Res/Comm`)%>%
+  mutate(RCstatus=if_else(Res_Com=="R","Resident",
+                          if_else(Res_Com=="C","Commuter",Res_Com)))%>%
+  select(-Res_Com)
+  
+#check: fis.allstu.t%>%count(RCstatus)
+
+#df clean: recode/shorten race
+fis.allstu<-fis.allstu%>%mutate(Ethnicity=if_else(is.na(Ethnicity),"Race and Ethnicity Unknown",Ethnicity))%>%
+  mutate(Ethnicity=if_else(Ethnicity=="Race and Ethnicity Unknown","Unknown",Ethnicity))%>%
+  mutate(Ethnicity=if_else(Ethnicity=="Two or more Races","Multi-races",Ethnicity))%>%
+  mutate(Ethnicity=if_else(Ethnicity=="Non Resident Alien","International",Ethnicity))%>%
+  mutate(Ethnicity=if_else(Ethnicity=="Native Hawaiian or Other Pacific Islander","Native",Ethnicity))%>%
+  mutate(Ethnicity=if_else(Ethnicity=="Black or African American","Black",Ethnicity))
+
+#df clean: recode gender
+fis.allstu<-fis.allstu%>%mutate(gender=if_else(is.na(gender),"Unknown",gender))
+```
+
+
+```{r respondent vs allstu res.com figure}
+#background info: gender & ethnicity, FT/PT & Transfer, RC
+#create RC figure
+ResAll.rcstatus<-fis.allstu%>%filter(!is.na(RCstatus))%>%
+  group_by(RespondentOverall,RCstatus)%>%summarise(cnt=n())%>%
+  mutate(prt=formattable::percent(cnt/sum(cnt),digits=0))%>%
+  
+ggplot(aes(x = prt, fill=RespondentOverall, y=RCstatus)) +
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  labs(title=str_wrap("",40),#80 is a full line length
+       x="",y="",fill="")+ 
+  theme_lz()+
+  theme(axis.text.y = element_text(),
+       # legend.position = "bottom",
+        plot.margin=unit(c(0,0,
+                    0,0),"cm"))+
+    scale_y_discrete(labels=c("Commuters","Residents"))+
+  geom_text(aes(label=paste0(prt)),size=3,vjust=0.5,hjust=0.7,fontface="bold",position = position_dodge(0.9))+#, " ", RCstatus," among ",RespondentOverall
+  scale_fill_manual(values = c("grey","#69b3e7"))#+#fill legend labels=c(""),name="")
+ # coord_flip()
+```
+
+```{r respond vs allstu gender figure}
+#background info: gender & ethnicity, FT/PT & Transfer, RC
+#RC
+ResAll.gd<-fis.allstu%>%filter(gender!="Unknown")%>%
+  group_by(RespondentOverall,gender)%>%summarise(cnt=n())%>%
+  mutate(prt=formattable::percent(cnt/sum(cnt),digits=0))%>%
+  
+ggplot(aes(x = prt, fill=RespondentOverall, y=gender)) +
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  labs(title=str_wrap("",40),#80 is a full line length
+       x="",y="",fill="")+ 
+  theme_lz()+
+  theme(axis.text.y = element_text(), legend.position = "none",
+        plot.margin=unit(c(0,0,
+                    0,0),"cm"))+
+    scale_y_discrete(labels=c("Male","Female"))+
+  geom_text(aes(label=paste0(prt)),size=3,vjust=0.5,hjust=1.5,fontface="bold",position = position_dodge(0.9))+#, " ", gender," among ",RespondentOverall
+  scale_fill_manual(values = c("grey","#69b3e7"))#+#fill legend labels=c(""),name="")
+  #coord_flip()
+```
+
+
+```{r respond vs allstu ETHNICITY figure}
+ResAll.eth<-fis.allstu%>%filter(Ethnicity!="Unknown")%>%
+  group_by(RespondentOverall,Ethnicity)%>%summarise(cnt=n())%>%
+  mutate(prt=formattable::percent(cnt/sum(cnt),digits=0))%>%
+  
+  ggplot(aes(x = prt, fill=RespondentOverall, y=reorder(Ethnicity,(-prt))))+
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  labs(title=str_wrap("",40),x="",y="",fill="") +
+  theme_lz()+theme(axis.text.x = element_text(),legend.position = c(0.7,0.7),
+                   plot.margin=unit(c(0,0,
+                    0,0),"cm"))+
+  geom_text(aes(label=paste0(prt)),size=3,fontface="bold",position = position_dodge(0.9))+
+  #scale_y_discrete(guide=guide_axis(n.dodge = 2))+
+  scale_fill_manual(values = c("grey","#69b3e7"))+#fill legend labels=c(""),name="")
+  coord_flip()
+
+#pvttbl<-fis.allstu%>%filter(Ethnicity!="Unknown")%>%
+ # group_by(RespondentOverall,Ethnicity)%>%summarise(cnt=n())%>%
+  #mutate(prt=formattable::percent(cnt/sum(cnt),digits=0))
+
+#set_order <- pvttbl%>% filter(RespondentOverall=="All First-Year Students") %>%
+ #             arrange(prt) %>%mutate(eth_reorder = factor(Ethnicity))
+
+#ResAll.eth<-pvttbl%>%
+#ggplot(aes(x = prt, fill=RespondentOverall, y=Ethnicity)) +
+ # geom_bar(stat="identity",position = position_dodge(),width=0.8)+
+  #labs(title=str_wrap("",40),#80 is a full line length
+   #    x="",y="",fill="") +
+  #theme_lz()+
+  #theme(axis.text.x = element_text(), legend.position = c(0.5,0.8))+
+#  scale_y_discrete(limits = set_order$eth_reorder)+
+ # geom_text(aes(label=paste0(prt)),size=3,position = position_dodge(0.9))+
+  #scale_fill_manual(values = c("grey","#69b3e7"))+#fill legend labels=c(""),name="")
+  #coord_flip()
+```
+
+
+```{r respond vs not respond SAVE allstu22.infis}
+#left merge survey data with all population data 
+allstu22.infis<-allstu22%>%select(-RespondentOverall)
+allstu22.infis<-allstu22.infis%>%mutate(ResAll=
+                        if_else(ppid%in%fis.s$ppid,#if id is one of the same survey id 
+                        "Respond","Not Respond"))
+#check: allstu22.infis%>%count(ResAll) #314 person, 195 responded, 177 have ppid, 18 no ppid
+
+#response rate figure: not respond vs respond
+resp_rate<-allstu22.infis%>%group_by(ResAll)%>%summarise(cnt=n())%>%
+ mutate(prt=round(cnt/sum(cnt)*100,digits = 0))%>%
+  ggplot(aes(x=2, y = prt, fill=ResAll)) +#x=2 to place the pie centered on limit
+    xlim(0.5, 2.5)+#only show .5-2.5 of pie (0-.5 will be the hole)
+  geom_bar(stat="identity")+coord_polar(theta="y",start=0)+#make bar on a circled coord
+  scale_fill_manual(values = c("grey","#69b3e7"))+
+  annotate("text",x = 0.5, y = 0.5, fontface="bold",#center is 0.5
+           label = str_wrap(paste0(response_rate," Response Rate"),10))+#fontface=2 bolded
+    theme_lz()+
+  theme(legend.position = c(0.5,0.9),plot.margin=unit(c(0.5,0,
+                  0,0),"cm"))+
+  labs(#caption=str_wrap("Survey collected: Sep. 20-30, 2022",20),
+       title="",x="",y="",fill="")#subtitle = str_wrap("Survey Collection: Sep 20-30, 2022",20)
+  #annotate("text",x = 0.5, y = 2.5, label=)
+    #geom_text(aes(x =2,label = ResAll),position = position_stack(vjust = .5) )
+
+#response rate
+#ResAll.waffle<-fis.allstu%>%group_by(RespondentOverall)%>%summarise(cnt=n())%>%
+ # mutate(prt=round(cnt/sum(cnt)*100,digits = 0))%>%
+#ggplot(aes(values = prt, fill=RespondentOverall)) +
+ # geom_waffle(color="white",flip = TRUE)+
+  # labs(title=str_wrap(paste0(response_rate," Response Rate"),40),#, " (",num.response, " out of ", num.overall,")"),40),#80 is a full line length
+   #    x="",y="",fill="", 40)+
+       #subtitle=str_wrap("Data collection: Sep 20-30, 2022"),40)+ #shows bottom right
+  #theme_lz()+
+   # scale_y_discrete(labels=c("Respondents","All First-year"))+
+  #scale_fill_manual(values = c("grey","#69b3e7"))#fill legend labels=c(""),name="")
+ # geom_text(aes(x = prt, y=RespondentOverall, label=paste0(RespondentOverall,": ",prt)),color="white",position = position_dodge(0.9),hjust=1)
+
+#response rate
+#ResAll.number<-fis.allstu%>%count(RespondentOverall)%>%
+#ggplot(aes(x = n, y=RespondentOverall, fill=RespondentOverall)) +
+#  geom_col()+
+#  labs(title=str_wrap(paste0(response_rate," Response Rate"),40),#, " (",num.response, " out of ", num.overall,")"),40),#80 is a full line length
+#       x="",y="",fill="", 40)+
+       #subtitle=str_wrap("Data collection: Sep 20-30, 2022"),40)+ #shows bottom right
+#  theme_lz()+theme(legend.position = "none")+
+    #scale_y_discrete(labels=c("Respondents","All First-year"))+
+#  scale_fill_manual(values = c("#69b3e7","grey"))+#fill legend labels=c(""),name="")
+#  geom_text(aes(label=paste0(RespondentOverall,": ",n)),color="white",position = position_dodge(0.9),hjust=1)
+```
+
+
+
+
+## Response Rate and Respondents
+
+* The 2022 First Impression Survey was collected during September 20-30, 2022. We received responses from __62%__, representing 196 first year students, for the survey. 
+
+* The survey respondents are __highly representative__ of the overall first year students in terms of their residential/commuter status, gender, and ethnicity. 
+
+```{r combine res/comm and gender to display together}
+fig_gd.rc<-gridExtra::grid.arrange(ResAll.rcstatus, ResAll.gd, nrow=2)
+```
+
+```{r display resp_rate and combined figure,include=TRUE,fig.height=3}
+gridExtra::grid.arrange(resp_rate,fig_gd.rc, nrow=1, widths=c(1,1))
+#layout(matrix(c(1,2,3),nrow=1,ncol=3,byrow = TRUE))
+#ResAll.rcstatus+ ResAll.gd+ ResAll.eth +plot_layout(ncol = 3)
+```
+
+
+```{r display eth figure, include=TRUE}
+ResAll.eth #has to be separate b/d not part of grid.arrange
+```
+
+
+
+
+
+
+
+```{r historical data - one SATIS VS DISSATIS PERCENTAGE and NUMERIC MEANS for each survey item in previous years}
+historical<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/HistoricalItems.xlsx")
+
+historical$`2018`<-as.numeric(historical$`2018`)
+
+historical<-tidyr::pivot_longer(historical,cols=c(`2018`:`2021`),names_to = "year",values_to = "prt")
+```
+
+```{r current data - distill one SATIS VS DISSATIS PERCENTAGE for each survey item}
+#check: lapply(fis.s[,str_detect(names(fis.s),"cm$")==FALSE],unique)%>%View()
+##satis.t
+satis.t1<-fis.s%>%filter(!is.na(satis.activity))%>%#remove NA from total
+  group_by(satis.activity)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.activity>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.activity")%>%select(item,year,prt)#select needed vars and values
+
+satis.t2<-fis.s%>%filter(!is.na(satis.overallcourse))%>%#remove NA from total
+  group_by(satis.overallcourse)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.overallcourse>3,"Satisfied","Dissadisfied"))%>%
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.overallcourse")%>%select(item,year,prt)
+
+satis.t3<-fis.s%>%filter(!is.na(satis.majorcourse))%>%#remove NA from total
+  group_by(satis.majorcourse)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.majorcourse>3,"Satisfied","Dissadisfied"))%>%
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.majorcourse")%>%select(item,year,prt)
+
+satis.t4<-fis.s%>%filter(!is.na(satis.acchallenge))%>%#remove NA from total
+  group_by(satis.acchallenge)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.acchallenge>3,"Satisfied","Dissadisfied"))%>%
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.acchallenge")%>%select(item,year,prt)
+
+satis.t5<-fis.s%>%filter(!is.na(satis.accommit))%>%#remove NA from total
+  group_by(satis.accommit)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.accommit>3,"Satisfied","Dissadisfied"))%>%
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.accommit")%>%select(item,year,prt)
+
+satis.t6<-fis.s%>%filter(!is.na(satis.foodav))%>%#remove NA from total
+  group_by(satis.foodav)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.foodav>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.foodav")%>%select(item,year,prt)
+
+satis.t7<-fis.s%>%filter(!is.na(satis.residstaff))%>%#remove NA from total
+  group_by(satis.residstaff)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.residstaff>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.residstaff")%>%select(item,year,prt)
+
+satis.t8<-fis.s%>%filter(!is.na(satis.residhall))%>%#remove NA from total
+  group_by(satis.residhall)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(satis.residhall>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="satis.residhall")%>%select(item,year,prt)
+
+
+##emphasize faculty and connect
+#emphasize
+emp1<-fis.s%>%filter(!is.na(emphasize.acsupport))%>%#remove NA from total
+  group_by(emphasize.acsupport)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(emphasize.acsupport%in%c("Very much","Quite a bit"),
+                         "Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="emphasize.acsupport")%>%select(item,year,prt)
+
+emp2<-fis.s%>%filter(!is.na(emphasize.socoppo))%>%#remove NA from total
+  group_by(emphasize.socoppo)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(emphasize.socoppo%in%c("Very much","Quite a bit"),
+                         "Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="emphasize.socoppo")%>%select(item,year,prt)
+
+emp3<-fis.s%>%filter(!is.na(emphasize.campactivity))%>%#remove NA from total
+  group_by(emphasize.campactivity)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(emphasize.campactivity%in%c("Very much","Quite a bit"),
+                         "Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="emphasize.campactivity")%>%select(item,year,prt)
+
+emp4<-fis.s%>%filter(!is.na(emphasize.issueevents))%>%#remove NA from total
+  group_by(emphasize.issueevents)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(emphasize.issueevents%in%c("Very much","Quite a bit"),
+                         "Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="emphasize.issueevents")%>%select(item,year,prt)
+
+expect.t1<-fis.s%>%filter(!is.na(meetacexpect))%>%#remove NA from total
+  group_by(meetacexpect)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(meetacexpect>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="meetacexpect")%>%select(item,year,prt)
+#faculty
+faculty.t1<-fis.s%>%filter(!is.na(faculty.orgmaterial))%>%#remove NA from total
+  group_by(faculty.orgmaterial)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(faculty.orgmaterial>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="faculty.orgmaterial")%>%select(item,year,prt)
+
+faculty.t2<-fis.s%>%filter(!is.na(faculty.explain))%>%#remove NA from total
+  group_by(faculty.explain)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(faculty.explain>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="faculty.explain")%>%select(item,year,prt)
+
+faculty.t3<-fis.s%>%filter(!is.na(faculty.prep))%>%#remove NA from total
+  group_by(faculty.prep)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(faculty.prep>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="faculty.prep")%>%select(item,year,prt)
+
+faculty.t4<-fis.s%>%filter(!is.na(faculty.command))%>%#remove NA from total
+  group_by(faculty.command)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(faculty.command>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="faculty.command")%>%select(item,year,prt)
+
+#connect
+connect.t1<-fis.s%>%filter(!is.na(connect.faculty))%>%#remove NA from total
+  group_by(connect.faculty)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(connect.faculty>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="connect.faculty")%>%select(item,year,prt)
+
+connect.t2<-fis.s%>%filter(!is.na(connect.stu))%>%#remove NA from total
+  group_by(connect.stu)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(connect.stu>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="connect.stu")%>%select(item,year,prt)
+
+connect.t3<-fis.s%>%filter(!is.na(interact.outside))%>%#remove NA from total
+  group_by(interact.outside)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(interact.outside>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="interact.outside")%>%select(item,year,prt)
+
+## service.satis
+service.s1<-fis.s%>%filter(!is.na(service.aac)&service.aac!="Have not use")%>%#remove NA from total
+  group_by(service.aac)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.aac>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.aac.satis")%>%select(item,year,prt)
+
+service.s2<-fis.s%>%filter(!is.na(service.classtech)&service.classtech!="Have not use")%>%#remove NA from total
+  group_by(service.classtech)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.classtech>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.classtech.satis")%>%select(item,year,prt)
+
+service.s3<-fis.s%>%filter(!is.na(service.counseling)&service.counseling!="Have not use")%>%#remove NA from total
+  group_by(service.counseling)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.counseling>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.counseling.satis")%>%select(item,year,prt)
+
+service.s4<-fis.s%>%filter(!is.na(service.acadvisor)&service.acadvisor!="Have not met with advisor")%>%#remove NA from total
+  group_by(service.acadvisor)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.acadvisor>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.acadvisor.satis")%>%select(item,year,prt)
+
+service.s5<-fis.s%>%filter(!is.na(service.health)&service.health!="Have not use")%>%#remove NA from total
+  group_by(service.health)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.health>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.health.satis")%>%select(item,year,prt)
+
+service.s6<-fis.s%>%filter(!is.na(service.techhelp)&service.techhelp!="Have not use")%>%#remove NA from total
+  group_by(service.techhelp)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.techhelp>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.techhelp.satis")%>%select(item,year,prt)
+
+service.s7<-fis.s%>%filter(!is.na(service.shuttle)&service.shuttle!="Have not use")%>%#remove NA from total
+  group_by(service.shuttle)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.shuttle>3,"Satisfied","Dissadisfied"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Satisfied")%>%mutate(year="2022",item="service.shuttle.satis")%>%select(item,year,prt)
+
+## service.use- NA values also considered as "have not used"
+service.u1<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.aac)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.aac=="Have not use"|is.na(service.aac),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.aac.use")%>%select(item,year,prt)
+
+service.u2<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.classtech)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.classtech=="Have not use"|is.na(service.classtech),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.classtech.use")%>%select(item,year,prt)
+
+# fis.s%>%count(service.counseling)
+service.u3<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.counseling)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.counseling=="Have not use"|is.na(service.counseling),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.counseling.use")%>%select(item,year,prt)
+
+service.u4<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.acadvisor)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.acadvisor=="Have not met with advisor"|is.na(service.acadvisor),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.acadvisor.use")%>%select(item,year,prt)
+
+service.u5<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.health)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.health=="Have not use"|is.na(service.health),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.health.use")%>%select(item,year,prt)
+
+service.u6<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.techhelp)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.techhelp=="Have not use"|is.na(service.techhelp),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.techhelp.use")%>%select(item,year,prt)
+
+service.u7<-fis.s%>%filter(Status=="Complete")%>%#only completed survey responses for accurate donominator
+  group_by(service.shuttle)%>%summarise(cnt=n())%>%#count each 6 groups
+  mutate(regroup=if_else(service.shuttle=="Have not use"|is.na(service.shuttle),"Not-use","Used"))%>%#converge to 2 group
+  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+  filter(regroup=="Used")%>%mutate(year="2022",item="service.shuttle.use")%>%select(item,year,prt)
+```
+
+
+```{r service.use - wrong approach: only "have not used" is "have not used"}
+## service
+#service.u1<-fis.s%>%filter(!is.na(service.aac))%>%#remove NA from total
+#  group_by(service.aac)%>%summarise(cnt=n())%>%#count each 6 groups
+#  mutate(regroup=if_else(service.aac=="Have not use","Not-use","Used"))%>%#converge to 2 group
+#  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+#  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+#  filter(regroup=="Used")%>%mutate(year="2022",item="service.aac.use")%>%select(item,year,prt)
+
+#service.u4<-fis.s%>%filter(!is.na(service.acadvisor))%>%#remove NA from total
+#  group_by(service.acadvisor)%>%summarise(cnt=n())%>%#count each 6 groups
+#  mutate(regroup=if_else(service.acadvisor=="Have not met with advisor","Not-use","Used"))%>%#converge to 2 group
+#  group_by(regroup)%>%summarise(regroup.cnt=sum(cnt))%>%#group regrouped and sum previous cnt
+#  mutate(prt=formattable::percent(regroup.cnt/sum(regroup.cnt),digits = 0))%>%#prt within regroups
+#  filter(regroup=="Used")%>%mutate(year="2022",item="service.acadvisor.use")%>%select(item,year,prt)
+```
+
+
+```{r merge hist and current and SAVE prtdf}
+#merge current data
+current<-rbind(connect.t1,connect.t2,connect.t3,
+      emp1,emp2,emp3,emp4,
+      expect.t1,
+      faculty.t1,faculty.t2,faculty.t3,faculty.t4,
+      satis.t1,satis.t2,satis.t3,satis.t4,satis.t5,satis.t6,satis.t7,satis.t8,
+      service.s1,service.s2,service.s3,service.s4,service.s5,service.s6,service.s7,
+      service.u1,service.u2,service.u3,service.u4,service.u5,service.u6,service.u7)
+
+# merge hist and current and SAVE prtdf
+historical.prt<-historical%>%filter(prt<1)%>%mutate(prt=formattable::percent(prt,digits = 0))
+prtdf<-full_join(current,historical.prt)%>%unique()
+
+#save: 
+#write_xlsx(prtdf, "/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/satisfaction18-22.xlsx")
+
+#check: 
+#prtdf%>%count(item)%>%View()
+#sample_needed=Z^2*p*(1-p)/MOE^2
+#margin of error=Z*p/sqrt(sample_n)
+```
+
+\newpage
+
+# Satisfaction
+```{r create satis figure}
+#satis.4: satis.acchallenge, satis.accommit, satis.majorcourse, satis.overallcourse
+satis.aca.figure<-prtdf%>%filter(item%in%c("satis.overallcourse","satis.majorcourse", "satis.acchallenge", "satis.accommit"),year>2019)%>%
+  group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(y = prt, x=year, fill=year ))+
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  scale_fill_manual(values = c("Grey","Grey70","#69b3e7"))+
+  labs(title=str_wrap("",40),x="",y="",fill="") +
+  theme_lz()+
+ # theme(legend.position = "top",plot.margin=unit(c(1.5,1,1,-1),"cm"))+
+  geom_text(aes(label= ifelse(year==2022,as.character(round(prt,2)),"")),
+            size=3,vjust=1.5,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label= ifelse(year!=2022,as.character(round(prt,2)),"")),
+            size=3,vjust=1.5,color="#6C6F70",fontface="bold",position = position_dodge(0.9))+
+  
+  facet_wrap(~factor(item,levels =c("satis.overallcourse","satis.majorcourse", "satis.acchallenge", "satis.accommit"),labels = c(str_wrap("Overall Courses",10),
+                             str_wrap("Major Courses",10),
+                             str_wrap("Academic Challenge",10),
+                             str_wrap("Academic Commitment",10))),nrow=1,
+             strip.position="bottom") +
+  geom_line(aes(y = prt, x=year, group=item, 
+                color=factor(item,levels =c("satis.overallcourse","satis.majorcourse", "satis.acchallenge", "satis.accommit")), 
+                linetype=factor(item,levels =c("satis.overallcourse","satis.majorcourse", "satis.acchallenge", "satis.accommit"))),
+            stat="identity", show.legend = F)+#
+  scale_color_manual(name="",values=c("#6C6F70","#6C6F70","#6C6F70","#6C6F70"))+
+  scale_linetype_manual(name="",values=c("dashed","dashed","dashed","dashed"))
+
+#satis.4: satis.activity, satis.foodav, satis.residhall, satis.residstaff
+satis.life.figure<-prtdf%>%filter(item%in%c("satis.activity", "satis.foodav", "satis.residstaff", "satis.residhall"),year>2019)%>%
+  group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(y = prt, x=year, fill=year ))+
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  scale_fill_manual(values = c("Grey","Grey70","#69b3e7"))+
+  labs(title=str_wrap("",40),x="",y="",fill="") +
+  theme_lz()+#theme(legend.position = "none")+
+  geom_text(aes(label= ifelse(year==2022&prt>.8,as.character(round(prt,2)),"")),
+            size=3,vjust=1.5,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label= ifelse(year==2022&prt<.8,as.character(round(prt,2)),"")),
+            size=3,color="#641F45",vjust=1.5,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label= ifelse(year!=2022,as.character(round(prt,2)),"")),
+            size=3,vjust=1.5,color="#6C6F70",fontface="bold",position = position_dodge(0.9))+
+  
+  facet_wrap(~factor(item,levels =c("satis.activity", "satis.foodav", "satis.residstaff", "satis.residhall"),labels = c(str_wrap("Campus Activity",10),
+                             str_wrap("Food Availability",10),
+                             str_wrap("Residential Staff",10),
+                             str_wrap("Residence Hall",10))),nrow=1, strip.position="bottom") +
+  geom_line(aes(y = prt, x=year, group=item, 
+                color=factor(item,levels =c("satis.activity", "satis.foodav", "satis.residstaff", "satis.residhall")), 
+                linetype=factor(item,levels =c("satis.activity", "satis.foodav", "satis.residstaff", "satis.residhall"))),
+            stat="identity", show.legend = F)+#
+  scale_color_manual(name="",values=c("#6C6F70","#6C6F70","#6C6F70","#6C6F70"))+#lightyellow#FFCB4F
+  scale_linetype_manual(name="",values=c("dashed","dashed","dashed","dashed"))
+```
+
+## Academic Satisfaction
+
+* An average of __90%__ first year students are satisfied with their academic experiences. 
+
+* The academic satisfaction proportion is __consistently high__ across the past three years.
+
+```{r display satis figure, include=TRUE}
+satis.aca.figure
+```
+
+## Life Satisfaction
+
+* An average of __82%__ first year students are satisfied with their life experiences.
+
+* 37% first year students are __dissatisfied with food availability__. Some students hope for weekend and late night food hours.
+
+```{r display satis.life figure, include=TRUE}
+satis.life.figure
+```
+
+\newpage
+
+# Services
+
+```{r create service1-7.use/.satis figure}
+#service.use: "service.aac.use", "service.acadvisor.use", "service.classtech.use", "service.techhelp.use","service.counseling.use", "service.health.use", "service.shuttle.use" 
+service.use.figure<-prtdf%>%filter(item%in%c("service.aac.use", "service.acadvisor.use", "service.classtech.use", "service.techhelp.use","service.counseling.use", "service.health.use", "service.shuttle.use" ),year>2019)%>%
+  group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(y = prt, x=year, fill=year ))+
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  scale_fill_manual(values = c("Grey","Grey70","#69b3e7"))+
+  labs(title=str_wrap("",40),x="",y="",fill="") +
+  theme_lz()+
+  #theme(legend.position = "top",plot.margin=unit(c(2,1,1,-1),"cm"))+
+  geom_text(aes(label= ifelse(year==2022,as.character(round(prt,2)),"")),
+            size=2.8,vjust=1.2,hjust=.4,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label= ifelse(year!=2022,as.character(round(prt,2)),"")),
+            size=2.8,vjust=1.2,hjust=.4,color="#6C6F70",fontface="bold",position = position_dodge(0.9))+
+  
+  facet_wrap(~factor(item,levels =c("service.aac.use", "service.acadvisor.use", "service.classtech.use", "service.techhelp.use","service.counseling.use", "service.health.use", "service.shuttle.use" ),
+                     labels = c(str_wrap("Academic Achievement Center",10),
+                                str_wrap("Academic Advisor",10),
+                                str_wrap("Class Technology",10),
+                                str_wrap("Tech HelpDesk",10),
+                                str_wrap("Counseling Center",10),
+                                str_wrap("Health Center",10),
+                                str_wrap("Shuttle",10))),nrow=1,strip.position = "bottom") +
+  geom_line(aes(y = prt, x=year, group=item, 
+                color=factor(item,levels =c("service.aac.use", "service.acadvisor.use", "service.classtech.use", "service.techhelp.use","service.counseling.use", "service.health.use", "service.shuttle.use" )), 
+                linetype=factor(item,levels =c("service.aac.use", "service.acadvisor.use", "service.classtech.use", "service.techhelp.use","service.counseling.use", "service.health.use", "service.shuttle.use" ))),
+            stat="identity", show.legend = F)+#
+  scale_color_manual(name="",values=c("#FFCB4F","#FFCB4F","#6C6F70","#6C6F70","#6C6F70","#641F45","#6C6F70"))+
+  scale_linetype_manual(name="",values=c("solid","solid","dashed","dashed","dashed","solid","dashed"))
+
+#service.satis:"service.aac.satis", "service.acadvisor.satis", "service.classtech.satis", "service.techhelp.satis","service.counseling.satis", "service.health.satis", "service.shuttle.satis" 
+service.satis.figure<-prtdf%>%filter(item%in%c("service.aac.satis", "service.acadvisor.satis", "service.classtech.satis", "service.techhelp.satis","service.counseling.satis", "service.health.satis", "service.shuttle.satis" ),year>2019)%>%
+  group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(y = prt, x=year, fill=year ))+
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  scale_fill_manual(values = c("Grey","Grey70","#69b3e7"))+
+  labs(title=str_wrap("",40),x="",y="",fill="") +
+  theme_lz()+#theme(legend.position = "none",legend.direction = "vertical")+
+  #theme(plot.title = element_text(hjust = 0, vjust = -1))+#,plot.margin = margin(1,0,0,0,"cm"))+
+  geom_text(aes(label= ifelse(year==2022,as.character(round(prt,2)),"")),
+            size=2.8,vjust=1.5,hjust=.4,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label= ifelse(year!=2022,as.character(round(prt,2)),"")),
+            size=2.8,vjust=1.5,hjust=.4,color="#6C6F70",fontface="bold",position = position_dodge(0.9))+
+  
+  facet_wrap(~factor(item,levels =c("service.aac.satis", "service.acadvisor.satis", "service.classtech.satis", "service.techhelp.satis","service.counseling.satis", "service.health.satis", "service.shuttle.satis" ),
+                     labels = c(str_wrap("Academic Achievement Center",10),
+                                str_wrap("Academic Advisor",10),
+                                str_wrap("Class Technology",10),
+                                str_wrap("Tech HelpDesk",10),
+                                str_wrap("Counseling Center",10),
+                                str_wrap("Health Center",10),
+                                str_wrap("Shuttle",10))),nrow=1,strip.position = "bottom") +
+  geom_line(aes(y = prt, x=year, group=item, 
+                color=factor(item,levels =c("service.aac.satis", "service.acadvisor.satis", "service.classtech.satis", "service.techhelp.satis","service.counseling.satis", "service.health.satis", "service.shuttle.satis" )), 
+                linetype=factor(item,levels =c("service.aac.satis", "service.acadvisor.satis", "service.classtech.satis", "service.techhelp.satis","service.counseling.satis", "service.health.satis", "service.shuttle.satis" ))),
+            stat="identity", show.legend = F)+#
+  scale_color_manual(name="",values=c("#6C6F70","#6C6F70","#6C6F70","#FFCB4F","#FFCB4F","#6C6F70","#6C6F70"))+
+  scale_linetype_manual(name="",values=c("dashed","dashed","dashed","solid","solid","dashed","dashed"))
+```
+
+## Services Usage
+
+* First year students' usage of the __Academic Achievement Center and Academic Advisor__ has increased 17-21% compared to 2021.
+
+* Usage of __Health Center__ has dropped, probably due to less COVID related issues and tests.
+
+* Among all the services, __Counseling Center and Shuttle__ services are relatively low with 20-21% first-year students using them. 
+
+```{r display service figure, include=TRUE}
+service.use.figure
+```
+
+
+## Services Satisfaction
+
+* An average of 85% first year students are satisfied with services at Lasell.
+
+* 7-12% more first year students are satisfied with __Technology Help Desk and Counseling Center__ compared to 2021. 
+
+```{r display service.satis figure, include=TRUE}
+service.satis.figure
+```
+
+
+
+
+
+```{r create faculty.connect fig}
+#empashize4: "emphasize.acsupport", "emphasize.socoppo", "emphasize.campactivity", "emphasize.issueevents"
+emp.figure<-prtdf%>%filter(item%in%c("emphasize.acsupport", "emphasize.socoppo", "emphasize.campactivity", "emphasize.issueevents","connect.faculty", "connect.stu"),year=="2022")%>%
+  group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(x = prt, y=reorder(item,prt)))+
+  geom_bar(fill="#69b3e7", stat="identity",position = position_dodge(),width=0.8)+
+  labs(title=str_wrap("",40),x="",y="") +
+  theme_lz()+theme(legend.position = "none",axis.text.y = element_text(),
+                   plot.margin=unit(c(1,0,
+                    1,0),"cm"))+
+  geom_text(aes(label=if_else(prt>.8, as.character(round(prt,2)),"")),hjust=1.5,
+            size=3,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label=if_else(prt<.8, as.character(round(prt,2)),"")),hjust=1.5,
+            size=3,color="#641F45",fontface="bold",position = position_dodge(0.9))+
+  scale_y_discrete(labels=c("Issue-based Events","Connected to Faculty","Connected to Students","Social Opportunity","Campus Activity","Academic Support"))
+  
+
+#faculty4: "faculty.command", "faculty.explain", "faculty.orgmaterial", "faculty.prep"
+faculty.figure<-prtdf%>%filter(item%in%c("faculty.command", "faculty.explain", "faculty.orgmaterial", "faculty.prep","meetacexpect","interact.outside"),year=="2022")%>%
+  group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(x = prt, y=reorder(item,prt)))+
+  geom_bar(fill="#69b3e7", stat="identity",position = position_dodge(),width=0.8)+
+  labs(title=str_wrap("",40),x="",y="") +
+  theme_lz()+theme(legend.position = "none",axis.text.y = element_text(),
+                   plot.margin=unit(c(1,0,
+                    1,0),"cm"))+
+  geom_text(aes(label= as.character(round(prt,2))),hjust=1.2,
+            size=3,fontface="bold",position = position_dodge(0.9))+
+  scale_y_discrete(labels=c("Interact with Staff/Faculty Outside of Class","Meet Academic Expectation","Faculty Explain Materials Well","Faculty Command of Teaching","Faculty Well-Organized","Faculty Well-Prepared"))
+```
+
+
+
+```{r NUMERIC MEANS for survey items and SAVE fis.num}
+#remove qual vars
+fis.num<-fis.s[, !grepl("cm$",names(fis.s))]%>%select(Ethnicity,satis.activity:interact.outside)%>%select(-service.other)
+
+#recode services/emphasize qual to quan/num
+fis.num<-fis.num %>%mutate(
+  #assign NA to "have not use" option
+across(starts_with("service."),\(x) `is.na<-`(x, grepl("Have not use|Have not met with advisor", x))),
+  #assign numeric to qual options
+across(starts_with("emphasize"),~ case_when(. =="Very Little" ~ 1, . =="Some" ~ 2, . =="Quite a bit" ~ 3, . =="Very much" ~ 4)),
+  #formart recoded vars as numeric
+across(starts_with(c("emphasize.","service.")),as.numeric))
+
+#check:lapply(fis.num, unique);
+#str(fis.num)
+```
+
+```{r mutate aggregated NUMERIC MEAN}
+#r aggregate items in fis.num
+#aggregate satis, connect, faculty
+fis.num<-fis.num%>%mutate(satis=rowSums(.[grepl("^satis.",names(.)) & !grepl(".cm$",names(.))]),
+  #select[] vars based on & conditions; 
+  #default: na.rm=false: one NA then NA so that only all answered are compared
+  connect=rowSums(.[grepl("^connect.",names(.)) & !grepl(".cm$",names(.))]),
+  emphasize=rowSums(.[grepl("^emphasize.",names(.)) & !grepl(".cm$",names(.))]),
+  service=rowSums(.[grepl("^service.",names(.)) & !grepl(".cm$",names(.))]),
+  faculty=rowSums(.[grepl("^faculty.",names(.)) & !grepl(".cm$",names(.))]))
+
+#aggregate aca, life, soc
+fis.num<-fis.num%>%mutate(
+academic=satis.overallcourse+satis.majorcourse+satis.acchallenge+satis.accommit+emphasize.acsupport+service.aac+service.classtech+service.acadvisor+meetacexpect+faculty,
+life=satis.foodav+satis.foodav+satis.residhall+service.counseling+service.health+service.techhelp+service.shuttle,
+soc=satis.activity+connect+emphasize.socoppo+emphasize.campactivity+emphasize.issueevents+interact.outside)
+#check: lapply(fis.num, unique)
+```
+
+
+```{r fis.num final touch - adding more vars}
+#mutate more vars in fis.num
+fis.num<-cbind(fis.num,fis.s[,c("RCstatus","gender","FT/PT","ppid")])
+```
+
+
+```{r cal current.num and merge historical.num SAVE numdf}
+
+##calculate numeric means
+current.num<-tibble(
+faculty=round(mean(fis.num$faculty,na.rm=T)/length(fis.num[grepl("^faculty.",names(fis.num))]),digits = 2),
+connect.faculty=round(mean(fis.num$connect.faculty,na.rm=T),digits = 2),
+connect.stu=round(mean(fis.num$connect.stu,na.rm=T),digits = 2),
+#emphasize previously only count 3 (without "emphasize.socoppo")
+emphasize=round(mean(fis.num$emphasize,na.rm=T)/(length(fis.num[grepl("^emphasize.",names(fis.num))])-1),digits = 2))%>%
+#transform tibble to match historical df
+  mutate(year="2022")%>%
+  pivot_longer(cols = c(faculty,connect.faculty,connect.stu,emphasize),names_to = "item",values_to = "prt")
+
+##merge
+#find/select numeric means in historical data: historical%>%arrange(-prt)%>%View()
+historical.num<-historical%>%filter(item%in%c("faculty","emphasize") | grepl("^connect.",historical$item))
+
+#row bind
+numdf<-rbind(historical.num,current.num)%>%filter(!is.na(prt))%>%arrange(item)
+```
+
+```{r create numeric mean figure}
+#viz aggregated numericn means in numdf
+num.figure<-numdf%>%filter(year>2019)%>%
+  #group_by(item,year,prt)%>%summarise(cnt=n())%>%
+  
+  ggplot(aes(y = prt, x=year, fill=year ))+
+  geom_bar(stat="identity",position = position_dodge(),width=0.9)+
+  scale_fill_manual(values = c("Grey","Grey70","#69b3e7"))+
+  labs(title=str_wrap("",40),x="",y="",fill="") +
+  theme_lz()+theme(legend.position = c(0.5,0.9),
+                   plot.margin=unit(c(2.5,0,
+                    0,0),"cm"))+
+  geom_text(aes(label= ifelse(year==2022,as.character(round(prt,2)),"")),
+            size=3,vjust=1.5,fontface="bold",position = position_dodge(0.9))+
+  geom_text(aes(label= ifelse(year!=2022,as.character(round(prt,2)),"")),
+            size=3,vjust=1.5,color="#6C6F70",fontface="bold",position = position_dodge(0.9))+
+  
+  facet_wrap(~factor(item,levels =c("faculty", "connect.faculty", "connect.stu","emphasize"),labels = c(str_wrap("Faculty Teaching",10),
+                             str_wrap("Faculty Connection",10),
+                             str_wrap("Student Connection",10),
+                             str_wrap("Academic/Social Emphasis",10))),nrow=1,
+             strip.position="bottom") +
+  geom_line(aes(y = prt, x=year, group=item, 
+                color=factor(item,levels =c("faculty", "connect.faculty", "connect.stu","emphasize")), 
+                linetype=factor(item,levels =c("faculty", "connect.faculty", "connect.stu","emphasize"))),
+            stat="identity", show.legend = F)+#
+  scale_color_manual(name="",values=c("#FFCB4F","#6C6F70","#FFCB4F","#641F45"))+
+  scale_linetype_manual(name="",values=c("solid","dashed","solid","solid"))
+```
+
+\newpage
+
+# Academic and Social Support
+
+## 2022 Academic and Social Support
+
+* An average of 94% first year students are satisfied with __faculty-related academic lives__.
+
+* An average of 75% first year students are satisfied with their social lives including __activities and connections on campus__. 
+
+
+
+```{r display empfaculty fig,include=TRUE, fig.height=3.5}
+## 2022 Academic and Social Support
+gridExtra::grid.arrange(faculty.figure,emp.figure, nrow=1, widths=c(1,1))
+```
+
+## Historical Academic and Social Support
+
+* After aggregating related items to a __1-6 scale__, satisfaction towards faculty teaching is 1.0 higher than connection and social/academic emphasis.
+
+* __Student connections__ among first year students have increased consistently across the past three years.
+
+* __Academic/social emphasis__ have consistently dropped over the past three years.
+
+```{r display numfigure, include=TRUE, fig.height=3}
+## Historical Academic and Social Support (on scale of 1-6)
+num.figure
+```
+
+
+
+
+```{r list/overview/notes of hypothesis test options}
+#最严格
+#cor.test(numeric, numeric)
+
+##NumY
+#t.test(NumY~ 2CatX) #Cat: category; num: numeric = continuous/ordinal
+#wilcox.test(NumY~ 2CatX, paired=FALSE/TRUE)#not-normal distribution t.test
+#aov(NumY~ 3+CatX) 
+#kruskal.test(NumY, CatX) #not-normal distribution anova
+#lm(NumY~anyX+..)
+
+#CrossTable(propX, propY)
+#CrossTable(CatX, CatY)
+#glm(CatY~anyX, family = "binomial")# logistic regression: generalized linear model
+```
+
+
+```{r lm ethnicity on outcome vars}
+#check N: fis.num%>%count(Ethnicity)
+##summary(lm(service~Ethnicity,data=fis.num))
+##summary(lm(life~Ethnicity,data=fis.num))
+#viz the difference
+#fis.num%>%group_by(Ethnicity)%>%summarise(svmn=mean(service,na.rm=TRUE))%>%
+#  filter(svmn>0,!is.na(Ethnicity))%>%
+#  ggplot(aes(x=Ethnicity,y=svmn))+geom_bar(stat="identity")
+#viz together as points
+#fis.num%>%filter(Ethnicity %in% c("Black or African American","Hispanic","White"))%>%
+#  ggplot(aes(x=life,y=service))+geom_point(aes(color=Ethnicity))#+geom_line(aes(color=Ethnicity))
+
+#further investigate which service/life: found conseling
+##summary(aov(service.counseling~Ethnicity,data=fis.num))#different eth groups have different means
+##mod<-lm(service.counseling~Ethnicity,data=fis.num)#how being in each of the eth change the mean (as show in each group's coefficient)
+##summary(mod)#options(scipen=999)#options(scipen=0)
+##jtools::summ(mod, digits = 1)#broom::tidy(mod, conf.int = TRUE)
+
+#SET REFERENCE LEVEL IN LM
+#make ordinal as a factor is more accurate when lm
+#set the reference level of Ethnicity intentionally, to make the lm intercept that reference level 
+##eth2<-relevel(factor(fis.num$Ethnicity),"White")#reference level change from alpabetic to white
+##summary(lm(factor(service.counseling)~eth2,data=fis.num))
+#coefficient and p value are interpreted compared to the reference level; 
+#if not set reference level, then lm will auto-set the first reference level;
+#if intentionally include all level in lm, then we are comparing whether each var is different from zero
+#intentionally include all level (A,B,C): lm(y~I(1*(xvar=="A")+I(1*(xvar=="B"), data=data))#this set C as the reference level
+#lm(y~I(1*(xvar=="A")+I(1*(xvar=="B")+I(1*(xvar=="C"), data=data))#this set no reference level
+
+
+#MODEL SELECTION: use step-by-step nested model for variable selection:
+#mod1<-lm(service.counseling~eth2,data=fis.num); summary(mod1)$coefficients
+#mod2<-update(mod, service.counseling~eth2+gender); summary(mod2)$coefficients
+#1.If the result is NA coefficient for newvar, then that newvar is a combination of the other vars already included
+#2.anova(mod1,mod2)#if sig then adding additional var is meaningful for the y outcome
+
+#USE THE LM FOR PREDICTION: predict(mod2,newdata=)
+
+
+#viz the difference
+#fis.num%>%filter(Ethnicity %in% c("Black or African American","Hispanic","White","Race and Ethnicity Unknown","Two or more Races"))%>%
+#  ggplot(aes(x=Ethnicity,y=service.counseling,label=Ethnicity))+
+#  geom_point()+geom_text()+
+#  geom_jitter(aes(color=Ethnicity))
+#  #+geom_line(aes(color=Ethnicity))
+```
+
+
+```{r create ethnicity on counseling figure}
+ethdiff<-fis.num%>%group_by(Ethnicity)%>%summarise(svmn=mean(service.counseling,na.rm=TRUE))%>%
+  filter(svmn>0,!is.na(Ethnicity))%>%
+  ggplot(aes(x=reorder(Ethnicity,(-svmn)),y=svmn))+
+  geom_point(aes(color=Ethnicity),size=10)+
+  geom_text(aes(label=round(svmn,digits = 1)),fontface="bold")+
+  theme_lz()+
+  theme(axis.text.x =element_text(face = 'bold'),axis.text.y =element_text(face = 'bold'),legend.position = "none",plot.margin=unit(c(1.5,0,
+                    1,0),"cm"))+
+  labs(title=str_wrap("",40),x="",y="")+#caption="*Counseling service satisfaction is the only survey item significantly different by ethnicity"
+  scale_x_discrete(labels=c(str_wrap("Hispanic (n=32)",10),str_wrap("Black (n=20)",10),
+                            str_wrap("White (n=112)",10),str_wrap("Asian (n=6)",10),
+                            str_wrap("Unknown (n=4)",10),str_wrap("Multi-races (n=4)",10)))+
+  scale_y_continuous(limits = c(1,6), breaks=(seq(1, 6, 1)),
+                     labels=c("Extremely Dissatisfied","2","3","4","5","Extremely Satisfied"))+
+  scale_color_manual (values = c("grey70",mycolors[3],mycolors[3],"grey70","grey70",mycolors[3]),name="")
+
+
+
+
+ethdiff2<-fis.num%>%group_by(Ethnicity)%>%summarise(
+  counselmn=mean(service.counseling,na.rm=TRUE),
+  aacmn=mean(service.aac,na.rm=TRUE),
+  advmn=mean(service.acadvisor,na.rm=TRUE),
+  overallmn=(counselmn+aacmn+advmn)/3) %>%
+  filter(counselmn>0,aacmn>0,advmn>0,
+         !is.na(Ethnicity),Ethnicity!="Race and Ethnicity Unknown")%>%arrange(overallmn)%>%
+  pivot_longer(cols =c(counselmn:advmn), names_to = "mnitems",values_to = "meanvalue")%>%
+  
+  ggplot(aes(x=reorder(mnitems,(-meanvalue)),y=meanvalue))+
+  geom_point(aes(color=mnitems,shape=mnitems),
+             stat = "identity",position = position_dodge(width=0.9),size=10)+
+  geom_text(aes(label=round(meanvalue,digits = 1)),fontface="bold")+
+  theme_lz()+theme(axis.text.y =element_text(face = 'bold'))+labs(title="",x="",y="")+
+  scale_color_manual(values=c("grey","grey70",mycolors[6]),name="",labels=c("AAC","Advisor","Counseling"))+
+  scale_shape_manual(name = "", labels = c("AAC","Advisor","Counseling"), values = c(15,16,17))+
+  scale_y_continuous(limits = c(1,6), breaks=(seq(1, 6, 1)),labels=c("Extremely Dissatisfied","2","3","4","5","Extremely Satisfied")) +
+  facet_wrap(~factor(Ethnicity,levels = c("Two or more Races","Asian","White","Black or African American","Hispanic"),
+labels=c(str_wrap("Multi-races (n=4)",10),
+         str_wrap("Asian (n=6)",10),
+         str_wrap("White (n=112)",10),
+         str_wrap("Black (n=20)",10),
+         str_wrap("Hispanic (n=32)",10))),nrow=1, strip.position="bottom") 
+  
+  #scale_y_continuous(breaks = seq(1, 6, by = 1) ,labels=scales::percent_format(accuracy = 1))
+  #scale_y_discrete(labels=c("Extremly Dissatisfied","","","","","Extremly Satisfied"))
+```
+
+\newpage
+
+# Difference by Ethnicity: Counseling Service Satisfaction
+
+* We regressed first-year students' __demographic groups__ (i.e. gender, ethnicity, residential status, transfer status, first-generation status etc.) on each of the survey items. 
+
+* We found that the __counseling service satisfaction__ was the only area that had a statistically significant difference, on 99%(\*\*) and 95%(\*) confidence level, for first-year students groups from different ethnicity.
+
+* First-year students from __Hispanic (\*\*), Black (\*\*), and White (\*)__ groups rated counseling services significantly higher than other groups of students.
+
+```{r display ethdiff, include=TRUE, fig.height=4}
+ethdiff
+```
+
+
+
+# Summary
+
+* Over 90% first year students are satisfied with __academic experiences__ at Lasell. The academic satisfaction have been consistently high across the past years. 
+
+* Life experiences receive less satisfaction (average of 82%) among first year students. For example, __food availability__ only receives 63% satisfaction this year. Also, even though __student connection__ has slightly increased, still only 75% first year students are satisfied with their social lives including __activities and connections__ on campus.
+
+* Usage of __academic services__ have increased by 20% this year. Around 50% of first year students are using AAC and neeting with their academic advisers. However, usage of __Counseling Center and Shuttle__ remains as low as 20%. 
+
+* Satisfactions with Lasell __student services__ are over 85% among first year students. __Counseling center and Shuttle__ receive 7-12% higher satisfaction among first year students than last year. However, different __ethnicity__ groups seem to have different satisfactions towards counseling center. 
+
+```{r lm}
+#outcome vars: meetexpect, satis, connect, emphasize, faculty
+#cor.test(fis.num$connect,fis.num$faculty)
+#cor.test(fis.num$connect,fis.num$satis)
+#cor.test(fis.num$connect,fis.num$satis)
+
+#satis as outcome
+# data containing lm Xfactors (excluding satis. cols)
+#fis.l<-fis.num%>%select(-starts_with(c("satis.","service.")),#have to remove service due to na results in lm model
+#                      -connect,-faculty,-emphasize,-service)
+#check:lapply(fis.l, unique)
+#lm model: found meetacexpect, interact.outside, emphasize.campactivity, faculty.explain
+#summary(lm(satis~.,data=fis.l))
+
+#visualize difference
+
+```
+
+```{r merging factors}
+#dmt22fa<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Datamart Files/Test Run of Data Mart/FALL 2022/Test_run_datamart_FALL_ALL_sessions_20220926.xlsx")
+#see values for better select vars: dmt22fa%>%filter(ADMIT_YEAR=="2022")%>%select(COHORT:TRANSFERED_CREDITS_CUM)%>%lapply(., unique)
+#dmt22fa.s<-dmt22fa%>%select(PC_ID,BIRTHDATE,PARENTS_DEGREE,PARENTS_ATTENDED_COLL,ADMIT_TYPE,
+#                 ADMIT_STATE,SCHOOL_GEOMARKET_DESC,BPS_EXAM_YN,HS_GPA,HOME_GEOMARKET_DESC,LV_EMP_YN,APPLICATION_SOURCE,
+#                 starts_with(c("FA_LOANS","FA_GRNTS","FINAID_EFC","FA_EFC")),
+#                 FINAID_GRANTS_INST_RANGE,FA_Pell_ELIGIBLE_YN,FINAID_ACTUAL_AMT,
+                 
+#                 INTENDED_MAJOR,MAJOR_1,ACADEMIC_DEPT,REGISTRAR_DEPT,LASELL_WORKS_YN,FYS_COMB,FYS_SECTION,ADVISOR_FULL_NAME,
+#                 SESS_REG_CREDITS,REG_PRIOR_CUM_CREDIT,
+#                 REG_PRIOR_CUM_CREDIT,REG_PRIOR_CUM_CREDIT,SESS_REG_CREDITS,
+#                 TERM_CREDITS_ATTEMPTED,TERM_CREDITS_TOT,TERM_CREDITS_GPA,
+#                 TERM_COURSE_COUNT)%>%unique()%>%
+#          subset(.,select=which(!duplicated(names(.)))) # Drop Duplicated Columns
+#merge to fis.num
+#fis.num<-left_join(fis.num,dmt22fa.s,by=c("ppid"="PC_ID"))
+##check: sapply(lapply(fis.num, unique),length) if 1 or 2 (one is NA, then is the same as 1)
+##found: `Transfer YN`,RCstatus,RespondentOverall,`FT/PT`,Status,BPS_EXAM_YN,FINAID_EFC_IM_RANGE
+##all that works: select(satis:SCHOOL_GEOMARKET_DESC,HS_GPA:FINAID_EFC_FM_RANGE,FA_EFC_FM:TERM_COURSE_COUNT)
+```
+
+
+```{r satis outcome - gender diff/reg-factor}
+#select factors
+#fis.l<-fis.num%>%select(satis,connect,faculty,Ethnicity)
+#lm model
+#mod<-lm(satis~., data=fis.l)#cannot add "RCstatus" becuase n of commuter is too small that lm method think it has no variance
+#summary(mod)
+
+##remove no diff: FINAID_ACTUAL_AMT =FINAID_GRANTS_INST_RANGE,PARENTS_ATTENDED_COLL,MAJOR_1,BIRTHDATE,ADMIT_TYPE,TERM_COURSE_COUNT,FA_Pell_ELIGIBLE_YN,FINAID_ACTUAL_AMT,FA_GRNTS_TOT$,FA_LOANS_TOT$
+##has uninterretable diff: ADMIT_STATE,PARENTS_DEGREE,Ethnicity,FINAID_EFC_FM_RANGE,HS_GPA
+```
+
+
+```{r SAVE qual}
+##qual df
+qual<-fis.s[,str_detect(names(fis.s),".cm$|difficulty")]%>%janitor::remove_empty(c("rows", "cols"))
+#qual.emp<-qual%>%select(satis.foodav.cm,service.health.cm,connect.faculty.cm,connect.stu.cm)
+  
+#tried analysis, but cannot save list
+#qual.s<-lapply(qual, unique)
+#qual.s<-gsub("NA|\n|\"","",qual.s)#remove NA, remove \n, remove \"
+#gsub("NA|\n|\"|c(|)","",qual.s)
+
+#save
+#openxlsx::write.xlsx(list('AllCm' = qual,'ImpCm' = qual.emp), file = '/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/qualcm.xlsx') 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

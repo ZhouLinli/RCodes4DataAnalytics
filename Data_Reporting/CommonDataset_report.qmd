@@ -1,0 +1,499 @@
+---
+title: "CommonDataset_report"
+format: pdf
+editor: visual
+---
+
+```{r set up}
+source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R")
+```
+
+# CDS-I3 Class Size UG
+
+```{r load_secsize}
+secsize<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Course Count FA'22_cleanCDS-I.xlsx")
+#for convience of reporting
+secsize<-secsize%>%mutate(size=factor(size,levels =c("2-9","10-19","20-29","30-39") ))
+
+
+```
+
+```{r report_sec.size}
+#section
+secsize%>%filter(type=="section")%>%
+  filter(!is.na(size))%>%#remove 1 individual enrolled classes
+  count(size)%>%
+  pivot_wider(names_from = size, values_from = n)#convnience to report
+
+#check type: secsize%>%count(type)
+#subsection: including lab and recitation
+secsize%>%filter(type%in%c("lab","recitation"))%>%
+  filter(!is.na(size))%>%#remove 1 individual enrolled classes
+  count(size)%>%
+  pivot_wider(names_from = size, values_from = n)#convnience to report
+
+#compared to 2021-22 data: looks similar
+# compared to raw(cleaned data): results are the same
+```
+
+# CDS-F Fall Enrollment: UG state, res/com, age
+
+```{r load_fallenroll}
+#degsk<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2022 UG Backup Data Report_cleanCDS-F.xlsx")
+fallenroll<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2022 UG Backup Data Report_cleanCDS-FandB.xlsx")
+```
+
+## Degree seeking students
+
+```{r report_degsk.state}
+#important vars are admit_region, fyft and others
+#admit region
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  count(ADMIT_REGION)%>%
+  filter(ADMIT_REGION!="intl",#exclude international from numerator and denominator
+         !is.na(ADMIT_REGION))%>%#remove NA from discussion
+  mutate(prt=n/sum(n)*100)%>%
+  filter(ADMIT_REGION=="other states")#only report out of state prt
+```
+
+```{r report_degsk.res.com}
+#recoding live on vs off campus
+fallenroll$`Res/Comm`<-recode(fallenroll$`Res/Comm`,C="off campus",R="on campus")
+#for convinience of reporting
+fallenroll<-fallenroll%>%mutate(`Res/Comm`=factor(`Res/Comm`,
+                          levels = c("on campus","off campus")))
+
+#report
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  count(`Res/Comm`)%>%
+  mutate(prt=n/sum(n)*100)
+```
+
+```{r report_degsk.age}
+#age 25 or older
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  mutate(age.gp=if_else(Age>=25,">=25","<25"))%>%
+  count(age.gp)%>%
+  filter(!is.na(age.gp))%>%#remove the one NA
+  mutate(prt=n/sum(n)*100)%>%
+  filter(age.gp==">=25")#only report 25 or older
+#check with raw data: 1186 <25; 1235 has age value; 96% is < 25
+
+
+#avg age of full time students
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  filter(`FT/PT`=="FT")%>%#full time students
+  summarise(mn=mean(Age,na.rm=TRUE))
+
+#avg age of all students
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  summarise(mn=mean(Age,na.rm=TRUE))
+```
+
+## First time first year students
+
+```{r report_ftfy}
+#admit region
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  filter(fyft=="Y")%>%#only first time/non-transfer/complt first year/new students
+  count(ADMIT_REGION)%>%
+  filter(ADMIT_REGION!="intl",#exclude international from numerator and denominator
+         !is.na(ADMIT_REGION))%>%#remove NA from discussion
+  mutate(prt=n/sum(n)*100)%>%
+  filter(ADMIT_REGION=="other states")#only report out of state prt
+
+#live on vs off campus
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  filter(fyft=="Y")%>%#only fyft students
+  count(`Res/Comm`)%>%
+  mutate(prt=n/sum(n)*100)
+
+#age
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  filter(fyft=="Y")%>%#only fyft students
+  mutate(age.gp=if_else(Age>=25,">=25","<25"))%>%
+  count(age.gp)%>%
+  filter(!is.na(age.gp))%>%#remove the one NA
+  mutate(prt=n/sum(n)*100)%>%
+  filter(age.gp==">=25")#only report 25 or older
+#check with raw data: 315 <25; 324 has age value; 97% is < 25
+
+#avg age of full time students
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  filter(fyft=="Y")%>%#only fyft students
+  filter(`FT/PT`=="FT")%>%#full time students
+  summarise(mn=mean(Age,na.rm=TRUE))
+
+#avg age of all students
+fallenroll%>%filter(degreeseek=="Y")%>%#degree seeking students
+  filter(fyft=="Y")%>%#only fyft students
+  summarise(mn=mean(Age,na.rm=TRUE))
+```
+
+# CDS-B2 Fall Enrollment: UG race
+
+```{r factorize_eth}
+#for convnience of reporting
+#check: fallenroll%>%count(Ethnicity)
+fallenroll<-fallenroll%>%mutate(Ethnicity=factor(Ethnicity,
+            levels = c("Non Resident Alien","Hispanic","Black or African American",
+                       "White","Asian","Native Hawaiian or Other Pacific Islander",
+                       "Two or more Races","Race and Ethnicity Unknown")))
+```
+
+## All enrolled students
+
+```{r report_allenroll.race}
+fallenroll%>%
+  count(Ethnicity)
+```
+
+## Degree seeking students
+
+```{r report_degsk.race}
+#report degsk race
+fallenroll%>%filter(degreeseek=="Y")%>%
+  count(Ethnicity)
+```
+
+## First time first year students
+
+```{r report_ftfy.degsk.race}
+fallenroll%>%filter(degreeseek=="Y",#degree seeking students
+                    fyft=="Y")%>%#first time first year students
+  count(Ethnicity)
+```
+
+# CDS-B1 Fall Enrollment: UG FT/PT, gender
+
+```{r recode_gender}
+#for convnience of reporting
+fallenroll$Gender<-recode(fallenroll$Gender,M="Men",F="Women")
+#factorize order
+fallenroll<-fallenroll%>%mutate(Gender=factor(Gender,
+                levels = c("Men","Women")))
+```
+
+```{r report_UG.dgsk.fyft}
+#UG, degsk, fy(new).ft(non-transfer/non-complete)
+fallenroll%>%#UG
+filter(degreeseek=="Y",#degree seeking
+  #fyft=="Y"#alternative first year and first time filter
+  `College Attend`=="NEW",#first year
+  `Transfer YN`=="N",#first time: not a transfer student
+  !str_detect(Curriculum, "[Cc]ompletion"), #first time: not trans-completion program
+  )%>%
+  count(`FT/PT`,Gender)%>%
+  pivot_wider(names_from = `FT/PT`,values_from = n)
+```
+
+```{r UG.dgsk.fy.nft}
+#UG, degsk, fy(new).nf-t (transfer/complete)
+fallenroll%>%#UG
+filter(degreeseek=="Y",#degree seeking
+  `College Attend`=="NEW",#first year
+  `Transfer YN`=="Y"| str_detect(Curriculum, "[Cc]ompletion")
+  #not first time: transfer student OR not first time: in trans-completion program
+  )%>%
+  count(`FT/PT`,Gender)%>%
+  pivot_wider(names_from = `FT/PT`,values_from = n)
+#results: there are no transfer new dgsk UG students
+```
+
+```{r UG.dgsk.nfy}
+#UG, degsk, nf-y(ret)
+fallenroll%>%#UG
+filter(degreeseek=="Y",#degree seeking
+  `College Attend`!="NEW",#not first year
+  #no matter transfer or not
+  )%>%
+  count(`FT/PT`,Gender)%>%
+  pivot_wider(names_from = `FT/PT`,values_from = n)
+```
+
+```{r UG.ndgsk}
+#UG, n-degsk
+fallenroll%>%#UG
+filter(degreeseek=="N",# notdegree seeking
+  # no matter first year or not
+  # no matter transfer or not
+  )%>%
+  count(`FT/PT`,Gender)%>%
+  pivot_wider(names_from = `FT/PT`,values_from = n)
+```
+
+```{r confirm_dgsk}
+#explore consistence of dgsk students: fallenroll%>%filter(degreeseek=="Y",`FT/PT`=="FT")%>%count(`College Attend`,`Transfer YN`)
+#confirm gender by FT/PT
+fallenroll%>%#UG
+filter(degreeseek=="Y")%>%#degree seeking
+  count(`FT/PT`,Gender)%>%
+  pivot_wider(names_from = `FT/PT`,values_from = n)
+```
+
+```{r confirm_allUG}
+fallenroll%>%#UG
+  count(`FT/PT`,Gender)%>%
+  pivot_wider(names_from = `FT/PT`,values_from = n)
+```
+
+# CDS-B1 Fall Enrollment: GD FT/PT, gender
+
+```{r load_gdenroll}
+gdenroll<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Graduate/2022 Fall Graduate Backup Data Report.xlsx")
+#check duplication: gdenroll%>%count(People_Code_Id)%>%count(n)#no duplication 392
+
+#check: glimpse(gdenroll)
+```
+
+```{r fulfill_genderNA}
+#all non-transfer: gdenroll%>%count(Transfer_YN)#none transfer students
+#dgsk: gdenroll%>%count(Degree,Curriculum)%>%View()#Degree!="NON" for dgsk students
+#Gender: gdenroll%>%count(Gender)#3 unknown gender
+#explore gender unknown: gdenroll%>%filter(Gender=="U")%>%select(People_Code_Id,Name,Age,New_Ret_Term_YN,Degree,Curriculum,Admit_Year)
+#assign gender to unknown gender based on names
+gdenroll[gdenroll$People_Code_Id=="P000057114","Gender"]<-"F"
+gdenroll[gdenroll$People_Code_Id=="P000056435","Gender"]<-"M"
+gdenroll[gdenroll$People_Code_Id=="P000038867","Gender"]<-"M"
+#check Gender: gdenroll%>%count(Gender)#no unknown now
+
+#reorder and recode Gender
+gdenroll$Gender<-factor(gdenroll$Gender,levels = c("M","F"))
+gdenroll$Gender<-recode(gdenroll$Gender,M="Men",F="Women")
+```
+
+```{r report_firsttime/year and others}
+#first time and first year mean the same thing here
+
+#dgsk new (first time/year in the program)
+gdenroll%>%filter(Degree!="NON",#dgsk students 
+                  New_Ret_Term_YN=="Y"#first year
+                  )%>%count(FT_PT,Gender)%>%
+  pivot_wider(names_from = FT_PT,values_from = n)
+
+
+#other dgsk: dgsk and non new (not first time/year in the program)
+gdenroll%>%filter(Degree!="NON",#dgsk students 
+                  New_Ret_Term_YN=="N"#first year
+                  )%>%count(FT_PT,Gender)%>%
+  pivot_wider(names_from = FT_PT,values_from = n)
+
+#other enrolled: non-dgsk
+gdenroll%>%filter(Degree=="NON",#non-dgsk students 
+                  )%>%count(FT_PT,Gender)
+
+##confirm if all gd are reported
+gdenroll%>%count(FT_PT,Gender)%>%
+  pivot_wider(names_from = FT_PT,values_from = n)
+
+#total gd: since no duplication: nrow(gdenroll)
+```
+
+# CDS I2 Faculty-student ratio: based on B1 student number
+
+```{r ALLstudent_FTE}
+#full time equivalent=full time student headcount + 1/3* part time student headcount
+#UG students by FT/PT
+ug_n<-fallenroll%>%count(`FT/PT`)
+#GD students by FT/PT
+gd_n<-gdenroll%>%count(FT_PT)
+
+#FTE
+ug_n[ug_n$`FT/PT`=="FT",]$n+ gd_n[gd_n$FT_PT=="FT",]$n + #full time
+  1/3 * (ug_n[ug_n$`FT/PT`=="PT",]$n+ gd_n[gd_n$FT_PT=="PT",]$n )#part time
+```
+
+# CDS-B4: 2016 cohort finaid and completion
+
+```{r load_cohort16_fin}
+cohort16_fin<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Fall 2016 freeze file.cleanCDS-B4.xlsx",sheet ="cohort16fin" )
+
+#glimpse(cohort16_fin)
+#check: cohort16_fin%>%count(Cohort)
+```
+
+```{r report_2016cohort_fin}
+#all students are dgsk, full time, fall enrolled (first year/new), first time (non-transfer) students
+#CDS is just reporting finaid status in fall (no matter later semesters finaid status)
+
+#1."Recipients of a Federal Pell Grant"
+cohort16_fin%>%filter(pell=="receive")%>%
+  nrow()#137
+
+#2."Recipients of a Subsidized Stafford Loan who did not receive a pell"
+cohort16_fin%>%filter(stafford=="receive",#Recipients of a Subsidized Stafford Loan"
+                    pell=="not receive")%>%#who did not receive a pell"
+  nrow()#186
+
+
+#3.part1-in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+cohort16_fin%>%filter(pell=="not receive",#not receiving pell-(but received other finaid)
+                    stafford=="not receive")%>%#not receiving stafford-(but received other finaid)
+  nrow()#89
+
+#3.part2-not even in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+#(students who did not receive any grant are not in the fin16 file) NA in pell and stafford (the two cols are mutated based on fin16 cols)
+cohort16_fin%>%filter(is.na(pell), 
+                    is.na(stafford))%>%
+  #not receiving any finaid at all
+  nrow()#25
+
+
+#confirm all dgskFTft students: cohort16_fin%>%nrow()#437
+
+```
+
+```{r explore_completion.cols}
+#glimpse(cohort16_fin)
+#explore: #graduated (Y/N), grad date (Y-M-D), grad year (`complete year` actually)
+```
+
+```{r report_cohort2016_comp.4}
+#1."Recipients of a Federal Pell Grant"
+cohort16_fin%>%filter(`Grad Year`<=4)%>%
+  filter(pell=="receive")%>%nrow()#72
+
+#2."Recipients of a Subsidized Stafford Loan who did not receive a pell"
+cohort16_fin%>%filter(`Grad Year`<=4)%>%
+  filter(stafford=="receive",#Recipients of a Subsidized Stafford Loan"
+         pell=="not receive")%>%#who did not receive a pell"
+  nrow()#114
+
+
+#3.part1-in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+cohort16_fin%>%filter(`Grad Year`<=4)%>%
+  filter(pell=="not receive",#not receiving pell-(but received other finaid)
+        stafford=="not receive")%>%#not receiving stafford-(but received other finaid)
+  nrow()#51
+
+#3.part2-not even in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+#(students who did not receive any grant are not in the fin16 file) NA in pell and stafford (the two cols are mutated based on fin16 cols)
+cohort16_fin%>%filter(`Grad Year`<=4)%>%
+  filter(is.na(pell), is.na(stafford))%>%
+  #not receiving any finaid at all
+  nrow()#12
+
+#confirm all complete in 4 yr or less: cohort16_fin%>%filter(`Grad Year`<=4)%>%nrow() # 249
+```
+
+```{r report_cohort2016_comp.4-5}
+#1."Recipients of a Federal Pell Grant"
+cohort16_fin%>%filter(`Grad Year`>4,`Grad Year`<=5)%>%
+  filter(pell=="receive")%>%nrow()#5
+
+#2."Recipients of a Subsidized Stafford Loan who did not receive a pell"
+cohort16_fin%>%filter(`Grad Year`>4,`Grad Year`<=5)%>%
+  filter(stafford=="receive",#Recipients of a Subsidized Stafford Loan"
+         pell=="not receive")%>%#who did not receive a pell"
+  nrow()#4
+
+
+#3.part1-in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+cohort16_fin%>%filter(`Grad Year`>4,`Grad Year`<=5)%>%
+  filter(pell=="not receive",#not receiving pell-(but received other finaid)
+        stafford=="not receive")%>%#not receiving stafford-(but received other finaid)
+  nrow()#1
+
+#3.part2-not even in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+#(students who did not receive any grant are not in the fin16 file) NA in pell and stafford (the two cols are mutated based on fin16 cols)
+cohort16_fin%>%filter(`Grad Year`>4,`Grad Year`<=5)%>%
+  filter(is.na(pell), is.na(stafford))%>%
+  #not receiving any finaid at all
+  nrow()#1
+
+#confirm all complete in more than 4 but within 5 yr: cohort16_fin%>%filter(`Grad Year`>4,`Grad Year`<=5)%>%nrow()#11
+
+```
+
+```{r report_cohort2016_comp.5-6}
+#1."Recipients of a Federal Pell Grant"
+cohort16_fin%>%filter(`Grad Year`>5,`Grad Year`<=6)%>%
+  filter(pell=="receive")%>%nrow()#2
+
+#2."Recipients of a Subsidized Stafford Loan who did not receive a pell"
+cohort16_fin%>%filter(`Grad Year`>5,`Grad Year`<=6)%>%
+  filter(stafford=="receive",#Recipients of a Subsidized Stafford Loan"
+         pell=="not receive")%>%#who did not receive a pell"
+  nrow()#4
+
+
+#3.part1-in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+cohort16_fin%>%filter(`Grad Year`>5,`Grad Year`<=6)%>%
+  filter(pell=="not receive",#not receiving pell-(but received other finaid)
+        stafford=="not receive")%>%#not receiving stafford-(but received other finaid)
+  nrow()#0
+
+#3.part2-not even in the finaid file, "Students who did not receive either a Pell Grant or a subsidized Stafford Loan"
+#(students who did not receive any grant are not in the fin16 file) NA in pell and stafford (the two cols are mutated based on fin16 cols)
+cohort16_fin%>%filter(`Grad Year`>5,`Grad Year`<=6)%>%
+  filter(is.na(pell), is.na(stafford))%>%
+  #not receiving any finaid at all
+  nrow()#0
+
+#confirm all complete in more than 5 but within 6 yr: cohort16_fin%>%filter(`Grad Year`>5,`Grad Year`<=6)%>%nrow()
+```
+
+```{r confirm_com.6.tot}
+cohort16_fin%>%filter(`Grad Year`<=6)%>%nrow()#266
+```
+
+# CDS-J Complete by UG CIP
+
+```{r load_ipedscomplete}
+complete<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Common Data Set/2022-2023/datafiles/Complete.with.Ethnicity_age.eric.editted_cleanCDS-J.xlsx")
+
+#complete%>%glimpse()
+```
+
+```{r convinient_reporting}
+#for convinience of reporting: 
+#complete<-complete%>%mutate(degree_awarded=factor(degree_awarded, levels = c("bachelor","associate","certificates"))) #, turns out can't change order in pivot_wider
+
+#for convinence 
+complete<-complete%>%mutate(cip.2g=factor(cip.2g,levels = c("01",  "03",  "04",  "05",  "09",  "10",  "11",  "12",  "13",  "14",  "15",  "16",  "19",  "22",  "23",  "24",  "25",  "26",  "27",  "28", "29",  "30",  "31",  "38",  "39",  "40",  "41",  "42",  "43",  "44",  "45",  "46",  "47",  "48",  "49",  "50",  "51",  "52",  "54")))
+
+#related variables
+#complete%>%count(Degree,degree_awarded)
+  #only report UG (bachelor's certificate, associate, and bachelor's); 
+  #no master/certificate: current certificates are all postbachelor
+```
+
+```{r hide-report_cip.prt}
+#report bachelor and associate togher (adding up to 100%)
+complete%>%
+  filter(degree_awarded%in%c("bachelor's degree","associate degree"))%>%
+  group_by(cip.2g,degree_awarded)%>%summarise(cnt=n())%>%
+  ungroup()%>%#so that it's not prt within the second subgroup
+  mutate(prt=round(cnt/sum(cnt),digits = 4))%>%select(-cnt)%>%
+  pivot_wider(names_from = degree_awarded,values_from = prt, values_fill = 0)%>%
+  View()#for copy paste
+
+```
+
+```{r report_bachelor_cip.prt}
+#report bachelor separately (adding bachelor up to total 100%)
+complete%>%
+  filter(degree_awarded%in%c("bachelor's degree"))%>%
+  group_by(cip.2g,.drop = FALSE)%>%#include all factor-levels in cip.2g
+  summarise(cnt=n())%>%
+  mutate(prt=round(cnt/sum(cnt),digits = 4))%>%select(-cnt)%>%
+  View()#for copy paste: have to add 28&29 when reporting
+```
+
+```{r report_associate_cip.prt}
+#report associate separately (adding associate up to total 100%)
+complete%>%
+  filter(degree_awarded%in%c("associate degree"))%>%
+  group_by(cip.2g,.drop = FALSE)%>%#include all factor-levels in cip.2g
+  summarise(cnt=n())%>%
+  mutate(prt=round(cnt/sum(cnt),digits = 4))%>%select(-cnt)%>%
+  View()#for copy paste
+
+```
+
+# CDS-B3 Complete by Degree
+
+```{r report_degree.cnt}
+#check mapping: complete%>%count(Degree,degree_awarded)
+complete%>%count(degree_awarded)
+```
