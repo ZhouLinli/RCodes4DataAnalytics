@@ -4,32 +4,30 @@ source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R")
 ```
 
 ```{r read_pdf}
-# function to read in PDFs and get one word per line.
-text_prepr <- function(doc, forum_year){
-  reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
-  df <- pdf_text(doc)
-  df <- data.frame(df)
-  df <- df %>%rename(text = df) %>%
-    unnest_tokens(word, text,  #
-                  token = "regex", pattern = reg) %>%
-    mutate(year = forum_year)
-  return(df)}
+#define a regex for any character or digit group
+reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))" 
+
+#define a function to break texts into single word per line
+text_prepr <- function(f){
+  df <- pdf_text(f) %>% as.tibble()%>% rename(ptext = value) %>%#one pdf page per row (value col)
+    unnest_tokens(btext, ptext, #break ptext into btext
+    token = "regex", pattern = reg)#unit of breaking texts
+  return(df)}#btext is one word (one per row in btext col)
 ```
 
 ```{r fnames}
-#prep file names for systematic reading
-fnames<-list.files(path = "/Users/linlizhou/Downloads/working/air/airprogramguide", pattern="*.pdf", full.names = TRUE)
+#2.prep file names for systematic reading
+path<-"/Users/linlizhou/Documents/Rprojects/RCodes4DataAnalytics/Data_Science_Ed/AIR-Forum_TextAnalysis/data"
+fnames<-list.files(path, pattern="*.pdf", full.names = TRUE)
 ```
 
 ```{r dta}
-#read each file and bind them
-dta<-data.frame()
-for (file in fnames) {
-  year<-gsub("\\D","",file)#replace any non digit to nothing, only left is digit
-  temp <-text_prepr(file,year)#read each file
-  dta<-rbind(dta, temp)#bind one by one
-  rm(temp)}
-#dta%>%count(year)
+#3.create dta
+dta<-data.frame()#initialize
+for (f in fnames) {#for each file
+year<-str_extract(f,"(\\d){4}")#extract 4digit group in file name
+temp<-text_prepr(f)%>%mutate(year)#break file and add year
+dta<-rbind(dta, temp);rm(temp)}#bind by row
 ```
 
 ```{r tbl}
