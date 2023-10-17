@@ -3,29 +3,10 @@ title: ""
 author: ''
 date: ""
 classoption: twoside
-header-includes:
-    \usepackage{fancyhdr}
-    \addtolength{\headheight}{0.7cm}
-    
-    \pagestyle{fancy} 
-    \fancyhead{}
-    \fancyfoot{}
-    
-    \fancyhead[LO]{\includegraphics[height=1.3cm]{/Users/linlizhou/Documents/Rprojects/IR.png}}
-    \fancyhead[RE]{\vspace{4mm}\textbf{2022 First Impression Survey Results}}
-    \fancyfoot[R]{\thepage}
-    \fancyfoot[L]{Please contact ir@lasell.edu for questions}
-    
-    \renewcommand{\headrulewidth}{0pt}
 output: 
   pdf_document:
     latex_engine: xelatex
     fig_height: 2
-  word_document:
-    toc: no
-    reference_docx: /Users/linlizhou/Documents/Rprojects/lasell.report.IN-USE.docx
-mainfont: Helvetica Light
-fontsize: 10pt
 ---
 
 ```{r setup, include=FALSE}
@@ -36,71 +17,6 @@ source("/Users/linlizhou/Documents/Rprojects/IR-Projects/theme_source.R") #run c
 ```{r load survey data}
 #read fis.origional (download from alchemer)
 fis.original<-read_csv("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Surveys/Lasell Internal/First Impressions/2022 Fall/20221013124928-SurveyExport.csv")
-
-#since the survey is complted in two phrases: phase one respondents only have their email (becasue it's a public link that cannot link back to a ppid as set in the contact list), phase two (when we send individual email invitation to those who have not completed the survey) respondents' ppid are included as custom invite field.
-#we need to find those ppid for students who used email as their unique identifier
-
-#fis.original email rename
-fis.original<-fis.original%>%
-  rename(email=`Please provide your Lasell email address. This information is needed for research purposes. Your personal information will be kept confidential and will not appear on any report. `)
-#fis.original email.short (only keep anything before @lasell.edu) for better match with other datasets
-fis.original<-fis.original%>%
-  mutate(email.short=gsub("@lasell.edu","",fis.original$email),#remove extra to keep all values the same format
-         email.short=str_to_lower(email.short))%>%  #lower case
-  select(-email)#to avoid too many cols get merged
-
-
-#helper dataset (containing all students' email as well as corresponding ppid)
-allstu<-read_excel("/Volumes/lasellshare/Faculty_Staff_Shares$/IR/Registrar Reports/2022 Fall/Fall 2022 UG Backup Data Report.xlsx")
-#select 2022 cohort (the students that are supposed to answer first impression survey) and other needed vars
-allstu22<-allstu%>%
-  filter(`Cohort Id`=="2022")%>%#this year's students
-  select(`People Code Id`, Name,`Lasell email`,
-         `Transfer YN`,`Res/Comm`,Gender,Ethnicity,`FT/PT`)%>%#select all usable vars
-  rename(gender=Gender)#to avoid join by "Gender"
-
-#create email.short (to match with fis.origional short.email)
-allstu22<-allstu22%>%
-  mutate(email.short=gsub("@lasell.edu","",allstu22$`Lasell email`),#remove extra to match fis.original emails
-         email.short=str_to_lower(email.short))%>%#keep lower case format
-  select(-`Lasell email`)#avoid too many cols get merged
-
-# fullfill_fis.original's ppid by left_join based on email
-#merge--keep the fis.origional students
-fis.original<-left_join(fis.original,allstu22,by="email.short")
-#all fis.original with a valid email will have a ppid and names now
-
-#check: sum(is.na(fis.original$`People Code Id`));
-#sum(is.na(fis.original$Name))
-##only 16 do not find a matched ppid/name
-```
-
-
-```{r fis.s}
-#decide to separate the (ppid_fullfilled) raw data (i.e. fis.origional) and the about to create renamed data (i.e. fis.s)
-
-#remove unnecessary starter cols
-fis.s<-fis.original%>%select(-(`Response ID`:`Date Submitted`),-(`Contact ID`:Source),-(`Invite Custom Field 2`:Gender))%>%#removed 54 cols
-  janitor::remove_empty(c("rows", "cols"))#remove empty rows/cols (including header has to be NA), removed 1 rows
-
-#remove NA cols: nothing get removed
-fis.s<-fis.s[ , colSums(is.na(fis.s)) < nrow(fis.s)] #sum each col's # of NA rows, as long as not all rows are NA then select them 
-
-#check: names(fis)[names(fis)%in%names(fis.s)==FALSE]
-
-
-#ppid col
-#check: sum(is.na(fis.s$`Invite Custom Field 1`));
-#sum(is.na(fis.s$`People Code Id`))#148vs15
-#there are currently two ppid cols; one from the left_join (based on email.short) and the second from students who complete the survey via reminder (based on a contact list with ppid/invited custom field 1)
-
-#keep only one ppid:
-fis.s<-fis.s%>%mutate(ppid=if_else(!is.na(`Invite Custom Field 1`),`Invite Custom Field 1`,#if settled by field then field
-     `People Code Id`))%>%#if not settled, then matched id
-  select(-`Invite Custom Field 1`,-`People Code Id`)
-
-#check: sum(is.na(fis.s$ppid))#14 without ppid
-
 
 #look at the survey instruction using lapply(fis.s, unique)
 #rename cols
@@ -187,32 +103,6 @@ fis.s<-fis.s%>%rename(
 
 
 # 2022 First Impression Survey
-
-## Executive Summary
-
-Major findings from the 2022 First Impression Survey are listed below. They indicate several strengths and opportunities of improving first-year students experiences at Lasell University.
-
-### Strengths
-* __Academic satisfaction__ remain high (over 90% on average) among first-year students
-
-* Usage of __academic achievement center__ and __academic adviser__ have increased for first-year students
-
-* First-year students' satisfaction towards __Tech HelpDesk__ and __Counseling Center__ have increased
-
-* __Teaching quality__ for first-year courses has been increasing steadily over the past three years
-
-* __Connection among first year students__ increased compared to previous years
-
-* First-year students from __Hispanic and Black ethnicity__ are highly satisfied with counseling services
-
-
-### Opportunities
-* Food availability can be improved
-  + First-year students want __late night and weekend hours__ for food
-* More __events and activities__ to help first-year students feel socially supported
-  + "Connections need time and opportunity to build"
-
-\newpage
 
 ```{r respondents vs allstu SAVE fis.allstu}
 #full merge survey data with all population data for background vars comparisions
@@ -389,9 +279,6 @@ resp_rate<-allstu22.infis%>%group_by(ResAll)%>%summarise(cnt=n())%>%
 
 ## Response Rate and Respondents
 
-* The 2022 First Impression Survey was collected during September 20-30, 2022. We received responses from __62%__, representing 196 first year students, for the survey. 
-
-* The survey respondents are __highly representative__ of the overall first year students in terms of their residential/commuter status, gender, and ethnicity. 
 
 ```{r combine res/comm and gender to display together}
 fig_gd.rc<-gridExtra::grid.arrange(ResAll.rcstatus, ResAll.gd, nrow=2)
