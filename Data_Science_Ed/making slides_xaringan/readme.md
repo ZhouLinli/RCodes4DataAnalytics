@@ -1,1 +1,1 @@
-The youtube video that walk through the codes is here: https://youtu.be/DOxjshvquzs
+The YouTube video that walks through the codes is here: https://youtu.be/DOxjshvquzs
