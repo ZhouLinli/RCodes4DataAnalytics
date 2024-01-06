@@ -1,0 +1,99 @@
+```{python stack_compare}
+class Solution:
+    def isValid(self, s: str) -> bool:
+      #如果是奇数则必定有一个leftover找不到匹配
+        if len(s) % 2 == 1:
+            return False
+
+        #先右括号，
+        #因为开括号需要等待匹配，
+        #而一旦出现收括号就可以向前寻找
+        #所以是 收括号 匹配 开括号 的顺序
+        pairs = {
+          #dictionary key:value pair
+            ")": "(",
+            "]": "[",
+            "}": "{",
+        }
+
+        stack = list()
+        
+        for ch in s:
+            #如果是pairs里面的任意一个key，即某种收括号
+            if ch in pairs:
+                if not stack or stack[-1] != pairs[ch]:
+                    #要么空的stack
+                    #要么stack最后一个/latest状态的并不是该收括号对应的value
+                    return False
+                    #失败，并非匹配或者是第一个(stack为空 需要先存第一个)
+                    #到此结束
+                
+                stack.pop()#如果反之：stack最后的括号 匹配上了pairs对应的value,
+                           #那么就remove当前这最后一个括号，进行下一个ch的loop
+            
+            #如果不是某种收括号key，则是一个开括号，要存起来
+            else:
+                stack.append(ch)
+        
+        return not stack
+        #空的stack是false, notstack是true
+        #多个开括号的情况，移除了最后一个，还剩前面几个再来比较
+
+```
+
+```{python}
+#Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid -- Open brackets must be closed by the same type of brackets in the correct order.
+#such as ()[]{}( and {}(]()
+#oop
+class Solution:
+    def isValid(self, s: str) -> bool:
+      
+        # If the length of the string is odd, there must be a leftover without a match
+        if len(s) % 2 == 1:
+            return False
+
+        # Define the pairs of closing and opening brackets
+        # The order is closing bracket, matching opening bracket
+        # Once a closing bracket is encountered, search backward for its matching opening bracket
+        #"({]"
+        #"(){}"
+        #"]"
+        pairs = {
+            ")": "(",
+            "]": "[",
+            "}": "{",
+        }
+
+        stack = list()
+
+        for ch in s:
+            # If the character is a closing bracket
+            if ch in pairs:
+                # If the stack is empty or the last element in the stack does not match the corresponding opening bracket
+                if not stack or stack[-1] != pairs[ch]:
+                    # It's a mismatch or the first bracket (stack is empty, so need to store the first one)
+                    return False
+
+                # If the closing bracket matches the corresponding opening bracket, remove the last element from the stack
+                stack.pop()
+            else:
+                # If the character is an opening bracket, store it in the stack
+                stack.append(ch)
+
+        # If the stack is empty, the brackets are valid
+        return not stack
+        # If the stack is not empty, there are unmatched opening brackets, so return False
+        # If the stack is empty, return True, indicating valid bracket pairs
+
+```
+
+```{python}
+# Create an instance of the Solution class
+instance = Solution()
+
+# Call the isValid method on the instance
+instance.isValid("(]")
+
+instance.isValid("()[]{}")
+
+```

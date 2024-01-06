@@ -1,0 +1,40 @@
+```{python}
+#["flower","flow","flight"] return "fl"
+
+class Solution:
+    def longestCommonPrefix(self, strs: list[str]) -> str:
+        if not strs: #if the input is empty, we directly say the longestcommonprefix is empty
+            return ""
+        
+        prefix = strs[0] #initiate the prefix to be the FIRST WORD in strs
+
+        for i in range(1, len(strs)):#from the second (position 1) str, till the last str (position len(strs))
+            prefix = self.lcp(prefix, strs[i]) #compare the first word to the second_till_last word
+            if not prefix: #if not prefix is true (ie. prefix is empty after the self.lcp function) then break
+                break #exit the loop
+        
+        return prefix #found the prefix by lcp function, defined below
+      
+#define a totally different helpful function 
+    def lcp(self, str1, str2):
+        shortlen = min(len(str1), len(str2))
+        i=0
+        while i<shortlen and str1[i] == str2[i]:
+              #i<shortlen so that i won't beyond the possible position values can take by any str that are currently being compared
+            i += 1 #if the two compared str has the same value in the same position, move to the next position to conduct the same comparison
+        return str1[:i] #while TRUE untill the two str no longer have same value for the same position, then return that i, up to the first several character in str1
+
+
+```
+
+
+```{python test}
+# Create an instance of the Solution class
+instance = Solution()
+
+# Call the isValid method on the instance
+instance.longestCommonPrefix(["flower","flow","flight"])
+
+instance.longestCommonPrefix(["dog","racecar","car"])
+
+```
