@@ -1,0 +1,105 @@
+
+
+
+```{python method1}
+#Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid -- Open symbols must be closed by the same type of symbols in the correct order.
+#such as ()[]{}( and {}(]()
+#oop
+class Solution:
+    def isValid(self, s: str) -> bool:
+      
+        # If the length of the string is odd, there must be a leftover without a match
+        if len(s) % 2 == 1:
+            return False
+
+        # Define the pairs of closing and opening symbols
+        # The order is closing symbol, matching opening symbol
+        # Once a closing symbol is encountered, search backward for its matching opening symbol
+        #"({]"
+        #"(){}"
+        #"]"
+        pairs = {
+            ")": "(",
+            "]": "[",
+            "}": "{",
+        }
+
+        stack = list()
+
+        for ch in s:
+            # If the character is a closing symbol
+            if ch in pairs:
+                # If the stack is empty or the last element in the stack does not match the corresponding opening symbol
+                if not stack or stack[-1] != pairs[ch]:
+                    # It's a mismatch or the first symbol (stack is empty, so need to store the first one)
+                    return False
+
+                # If the closing symbol matches the corresponding opening symbol, remove the last element from the stack
+                stack.pop()
+            else:
+                # If the character is an opening symbol, store it in the stack
+                stack.append(ch)
+
+        # If the stack is empty, the symbols are valid
+        return not stack
+        # If the stack is not empty, there are unmatched opening symbols, so return False
+        # If the stack is empty, return True, indicating valid symbol pairs
+
+```
+
+```{python eval_method1}
+# Create an instance of the Solution class
+instance = Solution()
+
+# Call the isValid method on the instance
+instance.isValid("(]")
+
+instance.isValid("()[]{}")
+
+```
+
+
+```{python method2}
+class Solution:
+  def is_matched(self, symbols: str) -> bool:
+  #"(({}))"
+    lefty = "({[" #opening symbols
+    righty = ")}]" #closing in the same order with lefty
+    S = list() 
+    
+    for c in symbols:
+      
+      if c in lefty: 
+        S.append(c) #S.push(c) # push left delimiter on stack
+      elif c in righty:
+        if not S: #S.is_empty( ): # no lefty component to match with
+          return False
+        if lefty.index(S.pop( )) != righty.index(c): # mismatched
+          return False
+        #if == (ie. matched) then continue the for loop 
+        #here S removed the most-recent-evaluated opening symbol, because S.pop() removed the lastly-pushed-components
+        
+    return not S #when S is empty, not S is true #S is empty when all symbols evaluated/popped-out without returning an False and break the loop
+```
+
+```{python eval_method2}
+# Create an instance of the Solution class
+instance = Solution()
+
+# Call the isValid method on the instance
+instance.is_matched("(]")
+
+instance.is_matched("()[]{}")
+
+instance.is_matched("(({})]")
+
+instance.is_matched("(({}))")
+```
+
+```{python}
+O(n)
+```
+
+
+
+
