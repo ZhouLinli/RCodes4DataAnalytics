@@ -1,5 +1,11 @@
 # Data Projects
-Welcome! This repository holds R codes for data projects, including data cleaning, analysis, and reporting of higher education data. I organized my works into three categories: 
+Welcome!
+
+This repository houses R codes for various data projects in higher education, encompassing data cleaning, analysis, and reporting.
+
+Interested in seeing these projects in action? Check out my [YouTube Channel](https://www.youtube.com/@linlishareresearch) for breakdowns of these data projects, and delve into my [Google Scholar profile](https://scholar.google.com/citations?user=NT9WnLoAAAAJ&hl=en) for in-depth research publications related to them.
+
+For easy access, I've categorized my works into three categories:
 
 ## Data Reporting
 In this folder, you will find R scripts/markdowns for reporting to educational agencies:
