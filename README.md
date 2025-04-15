@@ -3,7 +3,7 @@ Welcome!
 
 This repository houses R codes for various data projects in higher education, encompassing data cleaning, analysis, and reporting.
 
-Interested in seeing these projects in action? Check out my [YouTube Channel](https://www.youtube.com/@linlisharesresearch) for breakdowns of these data projects, read [my blog posts](https://medium.com/@linlizhou.fm) on data science, browse my visualization dashboards ([RPubs](https://rpubs.com/llz1722) or [ShinyApps](https://ym205k-linli.shinyapps.io/FacultyTenureAnalysis/)), and delve into my [Google Scholar profile](https://scholar.google.com/citations?user=NT9WnLoAAAAJ&hl=en) for in-depth research publications, all focused on using data to support decision-making!
+Interested in seeing these projects in action? Check out my [YouTube Channel](https://www.youtube.com/@linlisharesresearch) for breakdowns of these data projects, delve into my [Google Scholar profile](https://scholar.google.com/citations?user=NT9WnLoAAAAJ&hl=en) for in-depth research publications, read [my blog posts](https://medium.com/@linlizhou.fm) on data science, and browse my visualization dashboards ([RPubs](https://rpubs.com/llz1722) or [ShinyApps](https://ym205k-linli.shinyapps.io/FacultyTenureAnalysis/)), all focused on using data to support decision-making!
 
 For easy access, I've categorized my works into three categories:
 
